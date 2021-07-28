@@ -252,6 +252,7 @@ provider.use(async (ctx, next) => {
    * checking `ctx.oidc.route`, the unique route names used are
    *
    * `authorization`
+   * `backchannel_authentication`
    * `client_delete`
    * `client_update`
    * `client`
@@ -419,13 +420,14 @@ location / {
 - [jwks ❗](#jwks)
 - [features ❗](#features)
   - [backchannelLogout](#featuresbackchannellogout)
+  - [ciba](#featuresciba)
   - [claimsParameter](#featuresclaimsparameter)
   - [clientCredentials](#featuresclientcredentials)
   - [deviceFlow](#featuresdeviceflow)
   - [devInteractions ❗](#featuresdevinteractions)
   - [dPoP](#featuresdpop)
   - [encryption](#featuresencryption)
-  - [fapiRW](#featuresfapirw)
+  - [fapi](#featuresfapi)
   - [introspection](#featuresintrospection)
   - [issAuthResp](#featuresissauthresp)
   - [jwtIntrospection](#featuresjwtintrospection)
@@ -634,6 +636,176 @@ _**default value**_:
   enabled: false
 }
 ```
+
+### features.ciba
+
+[OpenID Connect Client Initiated Backchannel Authentication Flow - Core 1.0 - draft-03](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0-03.html)  
+
+Enables Core CIBA Flow, when combined with `features.fapi` enables [Financial-grade API: Client Initiated Backchannel Authentication Profile - Implementer's Draft 01](https://openid.net/specs/openid-financial-api-ciba-ID1.html) as well.   
+  
+
+
+_**default value**_:
+```js
+{
+  ack: undefined,
+  deliveryModes: [
+    'poll'
+  ],
+  enabled: false,
+  processLoginHint: [AsyncFunction: processLoginHint], // see expanded details below
+  processLoginHintToken: [AsyncFunction: processLoginHintToken], // see expanded details below
+  triggerAuthenticationDevice: [AsyncFunction: triggerAuthenticationDevice], // see expanded details below
+  validateBindingMessage: [AsyncFunction: validateBindingMessage], // see expanded details below
+  validateRequestContext: [AsyncFunction: validateRequestContext], // see expanded details below
+  verifyUserCode: [AsyncFunction: verifyUserCode] // see expanded details below
+}
+```
+
+<details><summary>(Click to expand) features.ciba options details</summary><br>
+
+
+#### deliveryModes
+
+Fine-tune the supported token delivery modes. Supported values are
+ - `poll`
+ - `ping`   
+  
+
+
+_**default value**_:
+```js
+[
+  'poll'
+]
+```
+
+#### processLoginHint
+
+Helper function used to process the login_hint parameter and return the accountId value to use for processsing the request.   
+  
+
+_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when login_hint is invalid. Use `return undefined` or when you can't determine the accountId from the login_hint.  
+
+
+_**default value**_:
+```js
+async function processLoginHint(ctx, loginHint) {
+  // @param ctx - koa request context
+  // @param loginHint - string value of the login_hint parameter
+  throw new Error('features.ciba.processLoginHint not implemented');
+}
+```
+
+#### processLoginHintToken
+
+Helper function used to process the login_hint_token parameter and return the accountId value to use for processsing the request.   
+  
+
+_**recommendation**_: Use `throw Provider.errors.ExpiredLoginHintToken('validation error message')` when login_hint_token is expired. Use `throw Provider.errors.InvalidRequest('validation error message')` when login_hint_token is invalid. Use `return undefined` or when you can't determine the accountId from the login_hint.  
+
+
+_**default value**_:
+```js
+async function processLoginHintToken(ctx, loginHintToken) {
+  // @param ctx - koa request context
+  // @param loginHintToken - string value of the login_hint_token parameter
+  throw new Error('features.ciba.processLoginHintToken not implemented');
+}
+```
+
+#### triggerAuthenticationDevice
+
+Helper function used to trigger the authentication and authorization on end-user's Authentication Device. It is called after accepting the backchannel authentication request but before sending client back the response.   
+ When the end-user authenticates use `provider.backchannelResult()` to finish the Consumption Device login process.   
+  
+
+
+_**default value**_:
+```js
+async function triggerAuthenticationDevice(ctx, request, account, client) {
+  // @param ctx - koa request context
+  // @param request - the BackchannelAuthenticationRequest instance
+  // @param account - the account object retrieved by findAccount
+  // @param client - the Client instance
+  throw new Error('features.ciba.triggerAuthenticationDevice not implemented');
+}
+```
+<a id="trigger-authentication-device-provider-backchannel-result-method"></a><details><summary>(Click to expand) `provider.backchannelResult()` method</summary><br>
+
+
+`backchannelResult` is a method on the Provider prototype, it returns a `Promise` with no fulfillment value.
+  
+
+```js
+const provider = new Provider(...);
+await provider.backchannelResult(...);
+```
+`backchannelResult(request, result[, options]);`
+ - `request` BackchannelAuthenticationRequest - BackchannelAuthenticationRequest instance.
+ - `result` Grant | OIDCProviderError - instance of a persisted Grant model or an OIDCProviderError (all exported by Provider.errors).
+ - `options.acr?`: string - Authentication Context Class Reference value that identifies the Authentication Context Class that the authentication performed satisfied.
+ - `options.amr?`: string[] - Identifiers for authentication methods used in the authentication.
+ - `options.authTime?`: number - Time when the End-User authentication occurred.  
+
+
+</details>
+
+#### validateBindingMessage
+
+Helper function used to process the binding_message parameter and throw if its not following the authorization server's policy.   
+  
+
+_**recommendation**_: Use `throw Provider.errors.InvalidBindingMessage('validation error message')` when the binding_message is invalid. Use `return undefined` when a binding_message isn't required and wasn't provided.  
+
+
+_**default value**_:
+```js
+async function validateBindingMessage(ctx, bindingMessage) {
+  // @param ctx - koa request context
+  // @param bindingMessage - string value of the binding_message parameter, when not provided it is undefined
+  if (bindingMessage && !/^[a-zA-Z0-9-._+/!?#]{1,20}$/.exec(bindingMessage)) {
+    throw new errors.InvalidBindingMessage('the binding_message value, when provided, needs to be 1 - 20 characters in length and use only a basic set of characters (matching the regex: ^[a-zA-Z0-9-._+/!?#]{1,20}$ )');
+  }
+}
+```
+
+#### validateRequestContext
+
+Helper function used to process the request_context parameter and throw if its not following the authorization server's policy.   
+  
+
+_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when the request_context is required by policy and missing or invalid. Use `return undefined` when a request_context isn't required and wasn't provided.  
+
+
+_**default value**_:
+```js
+async function validateRequestContext(ctx, requestContext) {
+  // @param ctx - koa request context
+  // @param requestContext - string value of the request_context parameter, when not provided it is undefined
+  throw new Error('features.ciba.validateRequestContext not implemented');
+}
+```
+
+#### verifyUserCode
+
+Helper function used to verify the user_code parameter value is present when required and verify its value.   
+  
+
+_**recommendation**_: Use `throw Provider.errors.MissingUserCode('validation error message')` when user_code should have been provided but wasn't. Use `throw Provider.errors.InvalidUserCode('validation error message')` when the provided user_code is invalid. Use `return undefined` when no user_code was provided and isn't required.  
+
+
+_**default value**_:
+```js
+async function verifyUserCode(ctx, account, userCode) {
+  // @param ctx - koa request context
+  // @param account -
+  // @param userCode - string value of the user_code parameter, when not provided it is undefined
+  throw new Error('features.ciba.verifyUserCode not implemented');
+}
+```
+
+</details>
 
 ### features.claimsParameter
 
@@ -882,26 +1054,22 @@ _**default value**_:
 }
 ```
 
-### features.fapiRW
+### features.fapi
 
-[Financial-grade API - Part 2: Read and Write API Security Profile (FAPI) - Implementer's Draft 02](https://openid.net/specs/openid-financial-api-part-2-ID2.html)  
+Financial-grade API Security Profile  
 
-Enables extra behaviours defined in FAPI Part 1 & 2 that cannot be achieved by other configuration options, namely:   
- - Request Object `exp` claim is REQUIRED
- - `userinfo_endpoint` becomes a FAPI resource, echoing back the x-fapi-interaction-id header and disabling query string as a mechanism for providing access tokens   
+Enables extra Authorization Server behaviours defined in FAPI that cannot be achieved by other configuration options.   
   
-
-_**recommendation**_: Updates to draft specification versions are released as MINOR library versions, if you utilize these specification implementations consider using the tilde `~` operator in your package.json since breaking changes may be introduced as part of these version updates. Alternatively, [acknowledge](#features) the version and be notified of breaking changes as part of your CI.  
 
 
 _**default value**_:
 ```js
 {
-  ack: undefined,
-  enabled: false
+  enabled: false,
+  profile: '1.0 Final'
 }
 ```
-<a id="features-fapi-rw-other-configuration-needed-to-reach-fapi-levels"></a><details><summary>(Click to expand) other configuration needed to reach FAPI levels
+<a id="features-fapi-other-configuration-needed-to-reach-fapi-conformance"></a><details><summary>(Click to expand) other configuration needed to reach FAPI conformance
 </summary><br>
 
 
@@ -910,15 +1078,33 @@ _**default value**_:
  - `clientDefaults` for setting different default client `response_types`
  - `clientDefaults` for setting client `tls_client_certificate_bound_access_tokens` to true
  - `clientDefaults` for setting client `require_signed_request_object` to true
+ - `clientDefaults` for setting client `default_acr_values` to whatever values are set by the specific FAPI ecosystem
  - `features.mTLS` and enable `certificateBoundAccessTokens`
  - `features.mTLS` and enable `selfSignedTlsClientAuth` and/or `tlsClientAuth`
  - `features.claimsParameter`
  - `features.requestObjects` and enable `request` and/or `request_uri`
- - `features.requestObjects.mode` set to `strict`
- - `enabledJWA`
+ - `enabledJWA` algorithm allow lists
  - (optional) `features.pushedAuthorizationRequests`
  - (optional) `features.jwtResponseModes`  
 
+
+</details>
+
+<details><summary>(Click to expand) features.fapi options details</summary><br>
+
+
+#### profile
+
+The specific profile of FAPI to enable. Supported values are:   
+ - '1.0 Final' (default) Enables behaviours from [Financial-grade API Security Profile 1.0 - Part 2: Advanced](https://openid.net/specs/openid-financial-api-part-2-1_0.html)
+ - '1.0 ID2' Enables behaviours from [Financial-grade API - Part 2: Read and Write API Security Profile - Implementer's Draft 02](https://openid.net/specs/openid-financial-api-part-2-ID2.html)
+ - Function returning one of the other supported values, or undefined if FAPI behaviours are to be ignored. The function is invoked with two arguments `(ctx, client)` and serves the purpose of allowing the used profile to be context-specific.  
+
+
+_**default value**_:
+```js
+'1.0 Final'
+```
 
 </details>
 
@@ -962,7 +1148,7 @@ async function introspectionAllowedPolicy(ctx, client, token) {
 
 ### features.issAuthResp
 
-[draft-ietf-oauth-iss-auth-resp-00](https://tools.ietf.org/html/draft-ietf-oauth-iss-auth-resp-00) - OAuth 2.0 Authorization Server Issuer Identifier in Authorization Response  
+[draft-ietf-oauth-iss-auth-resp-01](https://tools.ietf.org/html/draft-ietf-oauth-iss-auth-resp-01) - OAuth 2.0 Authorization Server Issuer Identifier in Authorization Response  
 
 Enables `iss` authorization response parameter for responses without existing countermeasures against mix-up attacks.   
   
@@ -1166,7 +1352,7 @@ false
 
 ### features.pushedAuthorizationRequests
 
-[draft-ietf-oauth-par-06](https://tools.ietf.org/html/draft-ietf-oauth-par-06) - OAuth 2.0 Pushed Authorization Requests (PAR)  
+[draft-ietf-oauth-par-08](https://tools.ietf.org/html/draft-ietf-oauth-par-08) - OAuth 2.0 Pushed Authorization Requests (PAR)  
 
 Enables the use of `pushed_authorization_request_endpoint` defined by the Pushed Authorization Requests draft.   
   
@@ -1422,7 +1608,7 @@ _**default value**_:
 defines the provider's strategy when it comes to using regular OAuth 2.0 parameters that are present. Parameters inside the Request Object are ALWAYS used, this option controls whether to combine those with the regular ones or not.   
  Supported values are:   
  - 'lax' (default) This is the behaviour expected by OIDC Core 1.0 - all parameters that are not present in the Resource Object are used when resolving the authorization request.
- - 'strict' This is the behaviour expected by FAPI or JAR, all parameters outside of the Request Object are ignored.   
+ - 'strict' This is the behaviour expected by FAPI or JAR, all parameters outside of the Request Object are ignored. For FAPI and FAPI-CIBA this value is enforced.   
   
 
 
@@ -1478,12 +1664,13 @@ true
 [RFC8707](https://tools.ietf.org/html/rfc8707) - Resource Indicators for OAuth 2.0  
 
 Enables the use of `resource` parameter for the authorization and token endpoints to enable issuing Access Tokens for Resource Servers (APIs).   
- - Multiple resource parameters may be present during Authorization Code Flow, but only a single audience for an Access Token is permitted.
- - Authorization Requests that result in an Access Token being issued by the Authorization Endpoint must only contain a single resource (or one must be resolved using the `defaultResource` helper).
+ - Multiple resource parameters may be present during Authorization Code Flow, Device Authorization Grant, and Backchannel Authentication Requests, but only a single audience for an Access Token is permitted.
+ - Authorization and Authentication Requests that result in an Access Token being issued by the Authorization Endpoint must only contain a single resource (or one must be resolved using the `defaultResource` helper).
  - Client Credentials grant must only contain a single resource parameter.
- - During Authorization Code / Refresh Token / Device Code exchanges, if the exchanged code/token does not include the `'openid'` scope and only has a single resource then the resource parameter may be omitted - an Access Token for the single resource is returned.
- - During Authorization Code / Refresh Token / Device Code exchanges, if the exchanged code/token does not include the `'openid'` scope and has multiple resources then the resource parameter must be provided (or one must be resolved using the `defaultResource` helper). An Access Token for the provided/resolved resource is returned.
- - (with userinfo endpoint enabled) During Authorization Code / Refresh Token / Device Code exchanges, if the exchanged code/token includes the `'openid'` scope and no resource parameter is present - an Access Token for the UserInfo Endpoint is returned.
+ - During Authorization Code / Refresh Token / Device Code / Backchannel Authentication Request exchanges, if the exchanged code/token does not include the `'openid'` scope and only has a single resource then the resource parameter may be omitted - an Access Token for the single resource is returned.
+ - During Authorization Code / Refresh Token / Device Code / Backchannel Authentication Request exchanges, if the exchanged code/token does not include the `'openid'` scope and has multiple resources then the resource parameter must be provided (or one must be resolved using the `defaultResource` helper). An Access Token for the provided/resolved resource is returned.
+ - (with userinfo endpoint enabled and useGrantedResource helper returning falsy) During Authorization Code / Refresh Token / Device Code exchanges, if the exchanged code/token includes the `'openid'` scope and no resource parameter is present - an Access Token for the UserInfo Endpoint is returned.
+ - (with userinfo endpoint enabled and useGrantedResource helper returning truthy) During Authorization Code / Refresh Token / Device Code exchanges, even if the exchanged code/token includes the `'openid'` scope and only has a single resource then the resource parameter may be omitted - an Access Token for the single resource is returned.
  - (with userinfo endpoint disabled) During Authorization Code / Refresh Token / Device Code exchanges, if the exchanged code/token includes the `'openid'` scope and only has a single resource then the resource parameter may be omitted - an Access Token for the single resource is returned.
  - Issued Access Tokens always only contain scopes that are defined on the respective Resource Server (returned from `features.resourceIndicators.getResourceServerInfo`).  
 
@@ -1493,7 +1680,8 @@ _**default value**_:
 {
   defaultResource: [AsyncFunction: defaultResource], // see expanded details below
   enabled: true,
-  getResourceServerInfo: [AsyncFunction: getResourceServerInfo] // see expanded details below
+  getResourceServerInfo: [AsyncFunction: getResourceServerInfo], // see expanded details below
+  useGrantedResource: [AsyncFunction: useGrantedResource] // see expanded details below
 }
 ```
 
@@ -1639,6 +1827,24 @@ and a JWT Access Token Format.
 }
 ```
 </details>
+
+#### useGrantedResource
+
+Function used to determine if an already granted resource indicator should be used without being explicitly requested by the client during the Token Endpoint request.   
+  
+
+_**recommendation**_: Use `return true` when it's allowed for a client skip providing the "resource" parameter at the Token Endpoint. Use `return false` (default) when it's required for a client to explitly provide a "resource" parameter at the Token Endpoint or when other indication dictates an Access Token for the UserInfo Endpoint should returned.  
+
+
+_**default value**_:
+```js
+async function useGrantedResource(ctx, model) {
+  // @param ctx - koa request context
+  // @param model - depending on the request's grant_type this can be either an AuthorizationCode, BackchannelAuthenticationRequest,
+  //                RefreshToken, or DeviceCode model instance.
+  return false;
+}
+```
 
 </details>
 
@@ -2045,7 +2251,7 @@ _**default value**_:
 
 ### extraTokenClaims
 
-Function used to assign additional claims to an Access Token when it is being issued. For `opaque` Access Tokens these claims will be stored in your storage under the `extra` property and returned by introspection as top level claims. For jwt` or `paseto` Access Tokens these will be top level claims. Returned claims will not overwrite pre-existing top level claims.   
+Function used to assign additional claims to an Access Token when it is being issued. For `opaque` Access Tokens these claims will be stored in your storage under the `extra` property and returned by introspection as top level claims. For `jwt` or `paseto` Access Tokens these will be top level claims. Returned claims will not overwrite pre-existing top level claims.   
   
 
 
@@ -2473,7 +2679,7 @@ async issueRefreshToken(ctx, client, code) {
 
 ### loadExistingGrant
 
-Helper function used to load existing but also just in time pre-established Grants,to attempt to resolve an Authorization Request with. Default: loads a grant based on the .,interaction result `consent.grantId` first, falls back to the existing grantId for the client,in the current session.  
+Helper function used to load existing but also just in time pre-established Grants to attempt to resolve an Authorization Request with. Default: loads a grant based on the interaction result `consent.grantId` first, falls back to the existing grantId for the client in the current session.  
 
 
 _**default value**_:
@@ -2516,7 +2722,7 @@ PKCE configuration such as available methods and policy check on required use of
 
 ### pkce.methods
 
-fine-tune the supported code challenge methods. Supported values are
+Fine-tune the supported code challenge methods. Supported values are
  - `S256`
  - `plain`  
 
@@ -2605,6 +2811,7 @@ Function called in a number of different context to determine whether an underly
  - Refresh Token Revocation
  - Authorization Code re-use
  - Device Code re-use
+ - Backchannel Authentication Request re-use
  - Rotated Refresh Token re-use  
 
 
@@ -2655,6 +2862,7 @@ _**default value**_:
 ```js
 {
   authorization: '/auth',
+  backchannel_authentication: '/backchannel',
   code_verification: '/device',
   device_authorization: '/device/auth',
   end_session: '/session/end',
@@ -2754,6 +2962,13 @@ _**default value**_:
     return 60 * 60; // 1 hour in seconds
   },
   AuthorizationCode: 600 /* 10 minutes in seconds */,
+  BackchannelAuthenticationRequest: function BackchannelAuthenticationRequestTTL(ctx, request, client) {
+    if (ctx && ctx.oidc && ctx.oidc.params.requested_expiry) {
+      return Math.min(10 * 60, +ctx.oidc.params.requested_expiry); // 10 minutes in seconds or requested_expiry, whichever is shorter
+    }
+  
+    return 10 * 60; // 10 minutes in seconds
+  },
   ClientCredentials: function ClientCredentialsTTL(ctx, token, client) {
     if (token.resourceServer) {
       return token.resourceServer.accessTokenTTL || 10 * 60; // 10 minutes in seconds

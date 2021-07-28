@@ -4,47 +4,48 @@
 const { strict: assert } = require('assert');
 const fs = require('fs');
 
+const parallel = require('mocha.parallel');
+
 const debug = require('./debug');
 const API = require('./api');
 
 const {
   SUITE_ACCESS_TOKEN,
   SUITE_BASE_URL = 'https://www.certification.openid.net',
+  SETUP,
 } = process.env;
 
-let {
-  CONFIGURATION = './certification/plan.json',
-  PLAN_NAME,
-  VARIANT,
-  SKIP,
-} = process.env;
+assert(SETUP, 'process.env.SETUP missing');
 
-if ('SETUP' in process.env) {
-  let configurationFile;
-  ({
-    configuration: configurationFile,
-    plan: PLAN_NAME,
-    skip: SKIP,
-    ...VARIANT
-  } = JSON.parse(process.env.SETUP));
-  CONFIGURATION = configurationFile || CONFIGURATION;
-  VARIANT = JSON.stringify(VARIANT);
-}
-
-assert(PLAN_NAME, 'process.env.PLAN_NAME missing');
-assert(CONFIGURATION, 'process.env.CONFIGURATION missing');
+const {
+  configuration: CONFIGURATION,
+  plan: PLAN_NAME,
+  skip: SKIP,
+  ...VARIANT
+} = JSON.parse(process.env.SETUP);
 
 const configuration = JSON.parse(fs.readFileSync(CONFIGURATION));
 const runner = new API({ baseUrl: SUITE_BASE_URL, bearerToken: SUITE_ACCESS_TOKEN });
 
 if ('alias' in configuration) {
-  configuration.alias = `${configuration.alias}-${Object.values(JSON.parse(VARIANT)).join('-')}`;
+  configuration.alias = `${configuration.alias}-${Object.values(VARIANT).join('-')}`;
+}
+
+if (PLAN_NAME === 'fapi1-advanced-final-test-plan') {
+  configuration.override = Object.entries(configuration.override).reduce((acc, [key, value]) => {
+    acc[key.replace('fapi-rw-id2', 'fapi1-advanced-final')] = value;
+    return acc;
+  }, {});
+}
+
+if (VARIANT.client_registration === 'dynamic_client') {
+  delete configuration.alias;
 }
 
 runner.createTestPlan({
   configuration,
   planName: PLAN_NAME,
-  variant: VARIANT,
+  variant: JSON.stringify(VARIANT),
 }).then((plan) => {
   const { id: PLAN_ID, modules: MODULES } = plan;
 
@@ -52,37 +53,45 @@ runner.createTestPlan({
   debug('%s/plan-detail.html?plan=%s', SUITE_BASE_URL, PLAN_ID);
   debug('modules to test %O', MODULES);
 
-  SKIP = SKIP || ('SKIP' in process.env ? process.env.SKIP.split(',') : []);
+  if (fs.existsSync('.failed')) {
+    fs.unlinkSync('.failed');
+  }
 
-  let download = false;
   describe(PLAN_NAME, () => {
     after(() => {
-      if (download) {
+      if (fs.existsSync('.failed')) {
+        fs.unlinkSync('.failed');
+        process.exitCode |= 1;
         return runner.downloadArtifact({ planId: PLAN_ID });
       }
       return undefined;
     });
 
-    afterEach(function () {
-      const { state, err } = this.currentTest;
-      if (state !== 'passed') {
-        download = true;
-        process.exitCode |= 1;
-        console.error(err);
+    parallel('', () => {
+      const skips = SKIP ? SKIP.split(',') : [];
+      for (const { testModule, variant } of MODULES) {
+        const test = skips.includes(testModule) ? it.skip : it;
+        test(`${testModule}, ${JSON.stringify(variant)}`, async () => {
+          debug('\n\nRunning test module: %s', testModule);
+          const { id: moduleId } = await runner.createTestFromPlan({
+            plan: PLAN_ID, test: testModule, variant,
+          });
+          debug('Created test module, new id: %s', moduleId);
+          debug('%s/log-detail.html?log=%s', SUITE_BASE_URL, moduleId);
+          try {
+            await runner.waitForState({ moduleId });
+          } catch (err) {
+            fs.writeFileSync('.failed', Buffer.alloc(0));
+            throw err;
+          }
+        });
       }
     });
 
-    for (const { testModule, variant } of MODULES) {
-      const test = SKIP.includes(testModule) ? it.skip : it;
-      test(`${testModule}, ${JSON.stringify(variant)}`, async () => {
-        debug('\n\nRunning test module: %s', testModule);
-        const { id: moduleId } = await runner.createTestFromPlan({
-          plan: PLAN_ID, test: testModule, variant,
-        });
-        debug('Created test module, new id: %s', moduleId);
-        debug('%s/log-detail.html?log=%s', SUITE_BASE_URL, moduleId);
-        await runner.waitForState({ moduleId });
-      });
+    if (configuration.alias) {
+      parallel.limit(1);
+    } else {
+      parallel.limit(10);
     }
   });
 

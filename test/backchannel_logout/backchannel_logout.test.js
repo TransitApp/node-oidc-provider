@@ -1,3 +1,4 @@
+const { strict: assert } = require('assert');
 const { parse: parseUrl } = require('url');
 
 const sinon = require('sinon').createSandbox();
@@ -6,8 +7,6 @@ const base64url = require('base64url');
 const nock = require('nock');
 
 const bootstrap = require('../test_helper');
-
-const fail = () => { throw new Error('expected promise to be rejected'); };
 
 describe('Back-Channel Logout 1.0', () => {
   before(bootstrap(__dirname));
@@ -61,8 +60,8 @@ describe('Back-Channel Logout 1.0', () => {
         .post('/backchannel_logout')
         .reply(500);
 
-      return client.backchannelLogout('subject', 'foo').then(fail, (err) => {
-        expect(err.message).to.eql('expected 200 OK from https://no-sid.example.com/backchannel_logout, got: 500 Internal Server Error');
+      return assert.rejects(client.backchannelLogout('subject', 'foo'), {
+        message: 'expected 200 OK from https://no-sid.example.com/backchannel_logout, got: 500 Internal Server Error',
       });
     });
   });
@@ -94,7 +93,7 @@ describe('Back-Channel Logout 1.0', () => {
           response_type: 'code id_token',
           redirect_uri: 'https://client.example.com/cb',
         })
-        .expect(302)
+        .expect(303)
         .expect((response) => {
           const { query } = parseUrl(response.headers.location.replace('#', '?'), true);
           expect(query).to.have.property('code');
@@ -177,7 +176,7 @@ describe('Back-Channel Logout 1.0', () => {
       return this.agent.post('/session/end/confirm')
         .send(params)
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect(() => {
           (() => {
             const { sid } = session.authorizations.client;
@@ -212,7 +211,7 @@ describe('Back-Channel Logout 1.0', () => {
       return this.agent.post('/session/end/confirm')
         .send(params)
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect(() => {
           expect(client.backchannelLogout.called).to.be.true;
           expect(client.backchannelLogout.calledWith(accountId, sid)).to.be.true;
@@ -235,7 +234,7 @@ describe('Back-Channel Logout 1.0', () => {
       return this.agent.post('/session/end/confirm')
         .send(params)
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect(() => {
           expect(client.backchannelLogout.called).to.be.false;
           client.backchannelLogout.restore();

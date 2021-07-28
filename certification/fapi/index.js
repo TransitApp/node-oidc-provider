@@ -1,3 +1,5 @@
+/* eslint-disable no-console */
+
 const { readFileSync } = require('fs');
 const path = require('path');
 const { randomBytes } = require('crypto');
@@ -8,7 +10,7 @@ const jose = require('jose2');
 const helmet = require('helmet');
 const pem = require('https-pem');
 
-const { Provider } = require('../../lib'); // require('oidc-provider');
+const { Provider, errors } = require('../../lib'); // require('oidc-provider');
 
 const OFFICIAL_CERTIFICATION = 'https://www.certification.openid.net';
 const { PORT = 3000, ISSUER = `http://localhost:${PORT}`, SUITE_BASE_URL = OFFICIAL_CERTIFICATION } = process.env;
@@ -95,6 +97,7 @@ const fapi = new Provider(ISSUER, {
     },
   ],
   clientDefaults: {
+    default_acr_values: ['urn:mace:incommon:iap:silver'],
     authorization_signed_response_alg: 'PS256',
     grant_types: ['implicit', 'authorization_code', 'refresh_token'],
     response_types: ['code', 'code id_token'],
@@ -105,7 +108,22 @@ const fapi = new Provider(ISSUER, {
   },
   clockTolerance: 5,
   features: {
-    fapiRW: { enabled: true },
+    ciba: {
+      enabled: true,
+      processLoginHint(ctx, loginHint) {
+        return loginHint;
+      },
+      verifyUserCode() {},
+      validateRequestContext() {},
+      triggerAuthenticationDevice() {},
+      deliveryModes: ['poll', 'ping'],
+    },
+    registration: { enabled: true },
+    registrationManagement: { enabled: true },
+    fapi: {
+      enabled: true,
+      profile: process.env.PROFILE ? process.env.PROFILE : '1.0 Final',
+    },
     mTLS: {
       enabled: true,
       certificateBoundAccessTokens: true,
@@ -122,7 +140,6 @@ const fapi = new Provider(ISSUER, {
         return undefined;
       },
     },
-    claimsParameter: { enabled: true },
     jwtResponseModes: { enabled: true },
     pushedAuthorizationRequests: { enabled: true },
     requestObjects: {
@@ -146,6 +163,15 @@ const fapi = new Provider(ISSUER, {
   },
 });
 
+const clientJwtAuthExpectedAudience = Object.getOwnPropertyDescriptor(fapi.OIDCContext.prototype, 'clientJwtAuthExpectedAudience').value;
+Object.defineProperty(fapi.OIDCContext.prototype, 'clientJwtAuthExpectedAudience', {
+  value() {
+    const acceptedAudiences = clientJwtAuthExpectedAudience.call(this);
+    acceptedAudiences.add(this.ctx.href);
+    return acceptedAudiences;
+  },
+});
+
 const orig = fapi.interactionResult;
 fapi.interactionResult = function patchedInteractionResult(...args) {
   if (args[2] && args[2].login) {
@@ -158,6 +184,40 @@ fapi.interactionResult = function patchedInteractionResult(...args) {
 function uuid(e){return e?(e^randomBytes(1)[0]%16>>e/4).toString(16):([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,uuid)} // eslint-disable-line
 
 const pHelmet = promisify(helmet());
+
+fapi.use(async (ctx, next) => {
+  if (ctx.path === '/ciba-sim') {
+    const { authReqId, action } = ctx.query;
+
+    const request = await fapi.BackchannelAuthenticationRequest.find(authReqId);
+
+    if (action === 'allow') {
+      const client = await fapi.Client.find(request.clientId);
+      const grant = new fapi.Grant({
+        client,
+        accountId: request.accountId,
+      });
+      grant.addOIDCScope(request.scope);
+      let claims = [];
+      if (request.claims.id_token) {
+        claims = claims.concat(Object.keys(request.claims.id_token));
+      }
+      if (request.claims.userinfo) {
+        claims = claims.concat(Object.keys(request.claims.userinfo));
+      }
+      grant.addOIDCClaims(claims);
+      await grant.save();
+      await fapi.backchannelResult(request, grant, { acr: 'urn:mace:incommon:iap:silver' }).catch(() => {});
+    } else {
+      await fapi.backchannelResult(request, new errors.AccessDenied('end-user cancelled request')).catch(() => {});
+    }
+
+    ctx.body = { done: true };
+    return undefined;
+  }
+
+  return next();
+});
 
 fapi.use(async (ctx, next) => {
   const origSecure = ctx.req.secure;
@@ -182,7 +242,7 @@ if (process.env.NODE_ENV === 'production') {
 
       switch (ctx.oidc && ctx.oidc.route) {
         case 'discovery': {
-          ['token', 'userinfo', 'pushed_authorization_request'].forEach((endpoint) => {
+          ['token', 'userinfo', 'pushed_authorization_request', 'backchannel_authentication'].forEach((endpoint) => {
             if (ctx.body[`${endpoint}_endpoint`].startsWith(ISSUER)) {
               ctx.body[`${endpoint}_endpoint`] = ctx.body[`${endpoint}_endpoint`].replace('https://', 'https://mtls.');
             }
@@ -192,6 +252,7 @@ if (process.env.NODE_ENV === 'production') {
         default:
       }
     } else if (ctx.method === 'GET' || ctx.method === 'HEAD') {
+      ctx.status = 303;
       ctx.redirect(ctx.href.replace(/^http:\/\//i, 'https://'));
     } else {
       ctx.body = {
@@ -212,5 +273,10 @@ if (SUITE_BASE_URL === OFFICIAL_CERTIFICATION) {
     ...pem,
   }, fapi.callback());
 
-  server.listen(PORT);
+  server.listen(PORT, () => {
+    console.log(`application is listening on port ${PORT}, check its /.well-known/openid-configuration`);
+    process.on('SIGINT', () => {
+      process.exit(0);
+    });
+  });
 }

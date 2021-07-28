@@ -36,7 +36,7 @@ describe('grant_type=authorization_code', () => {
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb',
         })
-        .expect(302)
+        .expect(303)
         .expect((response) => {
           const { query: { code } } = parseUrl(response.headers.location, true);
           const jti = this.getTokenJti(code);
@@ -213,7 +213,7 @@ describe('grant_type=authorization_code', () => {
         .expect(400)
         .expect(() => {
           expect(spy.calledOnce).to.be.true;
-          expect(errorDetail(spy)).to.equal('authorization code client mismatch');
+          expect(errorDetail(spy)).to.equal('client mismatch');
         })
         .expect((response) => {
           expect(response.body).to.have.property('error', 'invalid_grant');
@@ -310,7 +310,7 @@ describe('grant_type=authorization_code', () => {
           response_type: 'code',
           redirect_uri: 'https://client.example.com/cb3',
         })
-        .expect(302)
+        .expect(303)
         .expect((response) => {
           const { query: { code } } = parseUrl(response.headers.location, true);
           this.ac = code;
@@ -354,7 +354,7 @@ describe('grant_type=authorization_code', () => {
           scope: 'openid',
           response_type: 'code',
         })
-        .expect(302)
+        .expect(303)
         .expect((response) => {
           const { query: { code } } = parseUrl(response.headers.location, true);
           const jti = this.getTokenJti(code);
@@ -524,7 +524,7 @@ describe('grant_type=authorization_code', () => {
         .expect(400)
         .expect(() => {
           expect(spy.calledOnce).to.be.true;
-          expect(errorDetail(spy)).to.equal('authorization code client mismatch');
+          expect(errorDetail(spy)).to.equal('client mismatch');
         })
         .expect((response) => {
           expect(response.body).to.have.property('error', 'invalid_grant');

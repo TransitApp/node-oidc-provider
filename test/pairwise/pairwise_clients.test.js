@@ -5,8 +5,6 @@ const nock = require('nock');
 
 const bootstrap = require('../test_helper');
 
-const j = JSON.stringify;
-
 describe('pairwise features', () => {
   before(bootstrap(__dirname));
 
@@ -49,24 +47,7 @@ describe('pairwise features', () => {
         }, (err) => {
           expect(err).to.be.ok;
           expect(err.message).to.eq('invalid_client_metadata');
-          expect(err.error_description).to.eq('sector_identifier_uri is required when using multiple hosts in your redirect_uris');
-        });
-      });
-
-      it('fails to validate when no redirect_uris are provided', function () {
-        return i(this.provider).clientAdd({
-          client_id: 'client',
-          client_secret: 'secret',
-          redirect_uris: [],
-          grant_types: [],
-          response_types: [],
-          subject_type: 'pairwise',
-        }).then((client) => {
-          expect(client).not.to.be.ok;
-        }, (err) => {
-          expect(err).to.be.ok;
-          expect(err.message).to.eq('invalid_client_metadata');
-          expect(err.error_description).to.eq('sector_identifier_uri is required when redirect_uris hosts are not available');
+          expect(err.error_description).to.eq('sector_identifier_uri is mandatory property');
         });
       });
     });
@@ -74,14 +55,14 @@ describe('pairwise features', () => {
     context('sector_identifier_uri is provided', () => {
       it('is not ignored even without subject_type=pairwise', function () {
         nock('https://foobar.example.com')
-          .get('/file_of_redirect_uris')
-          .reply(200, j(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
+          .get('/sector')
+          .reply(200, JSON.stringify(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
 
         return i(this.provider).clientAdd({
           client_id: 'client',
           client_secret: 'secret',
           redirect_uris: ['https://client.example.com/cb', 'https://another.example.com/forum/cb'],
-          sector_identifier_uri: 'https://foobar.example.com/file_of_redirect_uris',
+          sector_identifier_uri: 'https://foobar.example.com/sector',
           subject_type: 'public',
         }).then((client) => {
           expect(client).to.be.ok;
@@ -91,14 +72,14 @@ describe('pairwise features', () => {
 
       it('validates the sector from the provided uri', function () {
         nock('https://foobar.example.com')
-          .get('/file_of_redirect_uris')
-          .reply(200, j(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
+          .get('/sector')
+          .reply(200, JSON.stringify(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
 
         return i(this.provider).clientAdd({
           client_id: 'client',
           client_secret: 'secret',
           redirect_uris: ['https://client.example.com/cb', 'https://another.example.com/forum/cb'],
-          sector_identifier_uri: 'https://foobar.example.com/file_of_redirect_uris',
+          sector_identifier_uri: 'https://foobar.example.com/sector',
           subject_type: 'pairwise',
         }).then((client) => {
           expect(client).to.be.ok;
@@ -108,8 +89,8 @@ describe('pairwise features', () => {
 
       it('validates the sector from the provided uri for static clients too', function () {
         nock('https://foobar.example.com')
-          .get('/file_of_redirect_uris')
-          .reply(200, j(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
+          .get('/sector')
+          .reply(200, JSON.stringify(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
 
         return this.provider.Client.find('client-static-with-sector').then((client) => {
           expect(client).to.be.ok;
@@ -122,7 +103,7 @@ describe('pairwise features', () => {
           client_id: 'client',
           client_secret: 'secret',
           redirect_uris: ['https://client.example.com/cb', 'https://another.example.com/forum/cb'],
-          sector_identifier_uri: 'http://client.example.com/file_of_redirect_uris',
+          sector_identifier_uri: 'http://client.example.com/sector',
           subject_type: 'pairwise',
         }).then((client) => {
           expect(client).not.to.be.ok;
@@ -134,34 +115,83 @@ describe('pairwise features', () => {
 
       it('validates all redirect_uris are in the uri', function () {
         nock('https://client.example.com')
-          .get('/file_of_redirect_uris')
-          .reply(200, j(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
+          .get('/sector')
+          .reply(200, JSON.stringify(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
 
         return i(this.provider).clientAdd({
           client_id: 'client',
           client_secret: 'secret',
           redirect_uris: ['https://client.example.com/cb', 'https://missing.example.com/forum/cb'],
-          sector_identifier_uri: 'https://client.example.com/file_of_redirect_uris',
+          sector_identifier_uri: 'https://client.example.com/sector',
           subject_type: 'pairwise',
         }).then((client) => {
           expect(client).not.to.be.ok;
         }, (err) => {
           expect(err).to.be.ok;
           expect(err.message).to.eq('invalid_client_metadata');
-          expect(err.error_description).to.eq('all registered redirect_uris must be included in the sector_identifier_uri');
+          expect(err.error_description).to.eq('all registered redirect_uris must be included in the sector_identifier_uri response');
+        });
+      });
+
+      describe('features.ciba', () => {
+        it('validates jwks_uri is in the response', function () {
+          nock('https://client.example.com')
+            .get('/sector')
+            .reply(200, JSON.stringify(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
+
+          return i(this.provider).clientAdd({
+            client_id: 'client',
+            response_types: [],
+            backchannel_token_delivery_mode: 'poll',
+            grant_types: ['urn:openid:params:grant-type:ciba'],
+            token_endpoint_auth_method: 'private_key_jwt',
+            jwks_uri: 'https://client.example.com/jwks',
+            sector_identifier_uri: 'https://client.example.com/sector',
+            subject_type: 'pairwise',
+          }).then((client) => {
+            expect(client).not.to.be.ok;
+          }, (err) => {
+            expect(err).to.be.ok;
+            expect(err.message).to.eq('invalid_client_metadata');
+            expect(err.error_description).to.eq("client's jwks_uri must be included in the sector_identifier_uri response");
+          });
+        });
+      });
+
+      describe('features.deviceFlow', () => {
+        it('validates jwks_uri is in the response', function () {
+          nock('https://client.example.com')
+            .get('/sector')
+            .reply(200, JSON.stringify(['https://client.example.com/cb', 'https://another.example.com/forum/cb']));
+
+          return i(this.provider).clientAdd({
+            client_id: 'client',
+            response_types: [],
+            grant_types: ['urn:ietf:params:oauth:grant-type:device_code'],
+            token_endpoint_auth_method: 'private_key_jwt',
+            jwks_uri: 'https://client.example.com/jwks',
+            sector_identifier_uri: 'https://client.example.com/sector',
+            subject_type: 'pairwise',
+          }).then((client) => {
+            expect(client).not.to.be.ok;
+          }, (err) => {
+            expect(err).to.be.ok;
+            expect(err.message).to.eq('invalid_client_metadata');
+            expect(err.error_description).to.eq("client's jwks_uri must be included in the sector_identifier_uri response");
+          });
         });
       });
 
       it('validates the response is a json', function () {
         nock('https://client.example.com')
-          .get('/file_of_redirect_uris')
+          .get('/sector')
           .reply(200, '{ not a valid json');
 
         return i(this.provider).clientAdd({
           client_id: 'client',
           client_secret: 'secret',
           redirect_uris: ['https://client.example.com/cb', 'https://missing.example.com/forum/cb'],
-          sector_identifier_uri: 'https://client.example.com/file_of_redirect_uris',
+          sector_identifier_uri: 'https://client.example.com/sector',
           subject_type: 'pairwise',
         }).then((client) => {
           expect(client).not.to.be.ok;
@@ -174,14 +204,14 @@ describe('pairwise features', () => {
 
       it('validates only accepts json array responses', function () {
         nock('https://client.example.com')
-          .get('/file_of_redirect_uris')
-          .reply(200, j('https://client.example.com/cb'));
+          .get('/sector')
+          .reply(200, JSON.stringify('https://client.example.com/cb'));
 
         return i(this.provider).clientAdd({
           client_id: 'client',
           client_secret: 'secret',
           redirect_uris: ['https://client.example.com/cb', 'https://missing.example.com/forum/cb'],
-          sector_identifier_uri: 'https://client.example.com/file_of_redirect_uris',
+          sector_identifier_uri: 'https://client.example.com/sector',
           subject_type: 'pairwise',
         }).then((client) => {
           expect(client).not.to.be.ok;
@@ -194,14 +224,14 @@ describe('pairwise features', () => {
 
       it('handles got lib errors', function () {
         nock('https://client.example.com')
-          .get('/file_of_redirect_uris')
+          .get('/sector')
           .reply(500);
 
         return i(this.provider).clientAdd({
           client_id: 'client',
           client_secret: 'secret',
           redirect_uris: ['https://client.example.com/cb', 'https://missing.example.com/forum/cb'],
-          sector_identifier_uri: 'https://client.example.com/file_of_redirect_uris',
+          sector_identifier_uri: 'https://client.example.com/sector',
           subject_type: 'pairwise',
         }).then((client) => {
           expect(client).not.to.be.ok;
@@ -214,14 +244,14 @@ describe('pairwise features', () => {
 
       it('doesnt accepts 200s, rejects even on redirect', function () {
         nock('https://client.example.com')
-          .get('/file_of_redirect_uris')
-          .reply(201, j('https://client.example.com/cb'));
+          .get('/sector')
+          .reply(201, JSON.stringify('https://client.example.com/cb'));
 
         return i(this.provider).clientAdd({
           client_id: 'client',
           client_secret: 'secret',
           redirect_uris: ['https://client.example.com/cb', 'https://missing.example.com/forum/cb'],
-          sector_identifier_uri: 'https://client.example.com/file_of_redirect_uris',
+          sector_identifier_uri: 'https://client.example.com/sector',
           subject_type: 'pairwise',
         }).then((client) => {
           expect(client).not.to.be.ok;

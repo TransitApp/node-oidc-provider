@@ -1,5 +1,7 @@
 /* eslint-disable no-underscore-dangle */
 
+const { strict: assert } = require('assert');
+
 const { expect } = require('chai');
 const KeyGrip = require('keygrip'); // eslint-disable-line import/no-extraneous-dependencies
 const sinon = require('sinon').createSandbox();
@@ -11,7 +13,6 @@ const epochTime = require('../../lib/helpers/epoch_time');
 const expire = new Date();
 expire.setDate(expire.getDate() + 1);
 const expired = new Date(0);
-const fail = () => { throw new Error('expected promise to be rejected'); };
 
 function handlesInteractionSessionErrors() {
   it('"handles" not found interaction session id cookie', async function () {
@@ -24,9 +25,10 @@ function handlesInteractionSessionErrors() {
     sinon.spy(this.provider, 'interactionDetails');
 
     await this.agent.get(this.url).expect(400);
-    await this.provider.interactionDetails.getCall(0).returnValue.then(fail, (err) => {
+    return assert.rejects(this.provider.interactionDetails.getCall(0).returnValue, (err) => {
       expect(err.name).to.eql('SessionNotFound');
       expect(err.error_description).to.eql('interaction session id cookie not found');
+      return true;
     });
   });
 
@@ -36,9 +38,10 @@ function handlesInteractionSessionErrors() {
     sinon.spy(this.provider, 'interactionDetails');
 
     await this.agent.get(this.url).expect(400);
-    await this.provider.interactionDetails.getCall(0).returnValue.then(fail, (err) => {
+    return assert.rejects(this.provider.interactionDetails.getCall(0).returnValue, (err) => {
       expect(err.name).to.eql('SessionNotFound');
       expect(err.error_description).to.eql('interaction session not found');
+      return true;
     });
   });
 }
@@ -160,13 +163,13 @@ describe('devInteractions', () => {
         });
 
       await this.agent.get(`${this.url}/abort`)
-        .expect(302)
+        .expect(303)
         .expect(({ headers: { location } }) => {
           this.location = location;
         });
 
       return this.agent.get(this.url.replace('interaction', 'auth'))
-        .expect(302)
+        .expect(303)
         .expect(auth.validateClientLocation)
         .expect(auth.validateState)
         .expect(auth.validateError('access_denied'))
@@ -198,14 +201,14 @@ describe('devInteractions', () => {
           login: 'foobar',
         })
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect('location', new RegExp(this.url.replace('interaction', 'auth')))
         .expect(({ headers }) => {
           ({ location } = headers);
         });
 
       await this.agent.get(new URL(location).pathname)
-        .expect(302);
+        .expect(303);
     });
 
     it('checks that the account is a non empty string', async function () {
@@ -219,7 +222,7 @@ describe('devInteractions', () => {
           login: '',
         })
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect('location', new RegExp(this.url.replace('interaction', 'auth')))
         .expect(({ headers }) => {
           ({ location } = headers);
@@ -261,14 +264,14 @@ describe('devInteractions', () => {
           prompt: 'consent',
         })
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect('location', new RegExp(this.url.replace('interaction', 'auth')))
         .expect(({ headers }) => {
           ({ location } = headers);
         });
 
       await this.agent.get(new URL(location).pathname)
-        .expect(302);
+        .expect(303);
     });
 
     it('checks the session interaction came from still exists', async function () {
@@ -278,7 +281,7 @@ describe('devInteractions', () => {
           prompt: 'consent',
         })
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect('location', new RegExp(this.url.replace('interaction', 'auth')))
         .expect(({ headers }) => {
           ({ location } = headers);
@@ -300,7 +303,7 @@ describe('devInteractions', () => {
           prompt: 'consent',
         })
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect('location', new RegExp(this.url.replace('interaction', 'auth')))
         .expect(({ headers }) => {
           ({ location } = headers);
@@ -321,7 +324,7 @@ describe('devInteractions', () => {
           prompt: 'consent',
         })
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect('location', new RegExp(this.url.replace('interaction', 'auth')))
         .expect(({ headers }) => {
           ({ location } = headers);
@@ -432,7 +435,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect('set-cookie', /expires/) // expect a permanent cookie
         .expect(auth.validateClientLocation)
         .expect(auth.validateState)
@@ -458,7 +461,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect('set-cookie', /expires/) // expect a permanent cookie
         .expect(auth.validateClientLocation)
         .expect(auth.validateState)
@@ -484,7 +487,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateState)
         .expect('set-cookie', /_session=((?!expires).)+,/) // expect a transient session cookie
         .expect(auth.validateClientLocation)
@@ -533,11 +536,11 @@ describe('resume after consent', () => {
           logout: 'yes',
         })
         .type('form')
-        .expect(302)
+        .expect(303)
         .expect('location', /\/auth\/resume$/);
 
       await this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateClientLocation)
         .expect(auth.validateState);
     });
@@ -557,7 +560,7 @@ describe('resume after consent', () => {
 
         return this.agent.get('/auth')
           .query(auth)
-          .expect(302)
+          .expect(303)
           .expect(auth.validateState)
           .expect(auth.validateClientLocation)
           .expect(auth.validateError('error_foo'))
@@ -581,7 +584,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateInteractionRedirect)
         .expect(auth.validateInteraction('login', 'reason_foo'));
     });
@@ -599,7 +602,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateState)
         .expect(auth.validatePresence(['error', 'state']))
         .expect(auth.validateError('access_denied'));
@@ -617,7 +620,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateState)
         .expect(auth.validatePresence(['error', 'state']))
         .expect(auth.validateError('access_denied'));
@@ -635,7 +638,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateState)
         .expect(auth.validateError('access_denied'))
         .expect(auth.validateErrorDescription('scope out of reach'));
@@ -653,7 +656,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateState)
         .expect(auth.validateError('custom_foo'))
         .expect(auth.validateErrorDescription('custom_foobar'));
@@ -674,7 +677,7 @@ describe('resume after consent', () => {
       await setup.call(this, auth, {});
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateInteractionRedirect)
         .expect(auth.validateInteraction('custom', 'custom_prompt'));
     });
@@ -691,7 +694,7 @@ describe('resume after consent', () => {
 
       return this.agent.get('/auth')
         .query(auth)
-        .expect(302)
+        .expect(303)
         .expect(auth.validateInteractionRedirect)
         .expect(auth.validateInteraction('unrequestable', 'un_foo'));
     });
@@ -713,7 +716,7 @@ describe('resume after consent', () => {
       });
 
       return this.agent.get('/auth/resume')
-        .expect(302)
+        .expect(303)
         .expect(auth.validateInteractionRedirect)
         .expect(auth.validateInteraction('unrequestable', 'un_foo'));
     });

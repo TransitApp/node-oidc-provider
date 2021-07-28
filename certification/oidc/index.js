@@ -7,9 +7,9 @@ const crypto = require('crypto');
 const render = require('koa-ejs');
 const helmet = require('helmet');
 
-const { Provider } = require('../lib'); // require('oidc-provider');
-const Account = require('../example/support/account');
-const routes = require('../example/routes/koa');
+const { Provider } = require('../../lib'); // require('oidc-provider');
+const Account = require('../../example/support/account');
+const routes = require('../../example/routes/koa');
 
 const configuration = require('./configuration');
 
@@ -114,6 +114,7 @@ let server;
           default:
         }
       } else if (ctx.method === 'GET' || ctx.method === 'HEAD') {
+        ctx.status = 303;
         ctx.redirect(ctx.href.replace(/^http:\/\//i, 'https://'));
       } else {
         ctx.body = {
@@ -129,11 +130,14 @@ let server;
     cache: false,
     viewExt: 'ejs',
     layout: '_layout',
-    root: path.join(__dirname, '..', 'example', 'views'),
+    root: path.join(__dirname, '..', '..', 'example', 'views'),
   });
   provider.use(routes(provider).routes());
   server = provider.listen(PORT, () => {
     console.log(`application is listening on port ${PORT}, check its /.well-known/openid-configuration`);
+    process.on('SIGINT', () => {
+      process.exit(0);
+    });
   });
 })().catch((err) => {
   if (server && server.listening) server.close();

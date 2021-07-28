@@ -6,9 +6,9 @@ const https = require('https');
 const pem = require('https-pem');
 const render = require('koa-ejs');
 
-const { Provider } = require('../lib'); // require('oidc-provider');
-const Account = require('../example/support/account');
-const routes = require('../example/routes/koa');
+const { Provider } = require('../../lib'); // require('oidc-provider');
+const Account = require('../../example/support/account');
+const routes = require('../../example/routes/koa');
 
 const configuration = require('./configuration');
 
@@ -36,8 +36,13 @@ render(provider.app, {
   cache: false,
   viewExt: 'ejs',
   layout: '_layout',
-  root: path.join(__dirname, '..', 'example', 'views'),
+  root: path.join(__dirname, '..', '..', 'example', 'views'),
 });
 provider.use(routes(provider).routes());
 const server = https.createServer(pem, provider.callback());
-server.listen(PORT);
+server.listen(PORT, () => {
+  console.log(`application is listening on port ${PORT}, check its /.well-known/openid-configuration`);
+  process.on('SIGINT', () => {
+    process.exit(0);
+  });
+});

@@ -1,3 +1,4 @@
+const { strict: assert } = require('assert');
 const util = require('util');
 
 const { expect } = require('chai');
@@ -9,6 +10,7 @@ const cloneDeep = require('lodash/cloneDeep');
 
 const { Provider } = require('../../lib');
 const { enabledJWA } = require('../default.config');
+const sectorIdentifier = require('../../lib/helpers/sector_identifier');
 
 const sigKey = global.keystore.get().toJWK();
 const privateKey = global.keystore.get().toJWK(true);
@@ -42,28 +44,29 @@ describe('Client metadata validation', () => {
     });
   }
 
-  const fail = () => { throw new Error('expected promise to be rejected'); };
-
   const mustBeString = (prop, values = [[], 123, true, null, false, {}, ''], metadata, configuration) => {
     values.forEach((value) => {
       let msg = util.format('must be a string, %j provided', value);
       if (metadata) msg = util.format(`${msg}, [client %j]`, omit(metadata, ['jwks.keys']));
       if (configuration) msg = util.format(`${msg}, [provider %j]`, configuration);
-      it(msg, () => addClient({ ...metadata, [prop]: value }, configuration).then(fail, (err) => {
+      // eslint-disable-next-line max-len
+      it(msg, () => assert.rejects(addClient({ ...metadata, [prop]: value }, configuration), (err) => {
         if (prop === 'redirect_uris') {
           expect(err.message).to.equal('invalid_redirect_uri');
         } else {
           expect(err.message).to.equal('invalid_client_metadata');
         }
         expect(err.error_description).to.equal(`${prop} must be a non-empty string if provided`);
+        return true;
       }));
     });
   };
 
-  const mustBeUri = (prop, protocols, configuration) => {
-    it('must be a uri', () => addClient({
+  const mustBeUri = (prop, protocols, configuration, metadata) => {
+    it('must be a uri', () => assert.rejects(addClient({
+      ...metadata,
       [prop]: 'whatever://not but not a uri',
-    }, configuration).then(fail, (err) => {
+    }, configuration), (err) => {
       if (prop === 'redirect_uris') {
         expect(err.message).to.equal('invalid_redirect_uri');
       } else {
@@ -74,6 +77,7 @@ describe('Client metadata validation', () => {
       } else {
         expect(err.error_description).to.equal(`${prop} must be a web uri`);
       }
+      return true;
     }));
 
     protocols.forEach((protocol) => {
@@ -87,15 +91,16 @@ describe('Client metadata validation', () => {
     values.forEach((value) => {
       let msg = util.format('must be a array, %j provided', value);
       if (configuration) msg = util.format(`${msg}, [provider %j]`, configuration);
-      it(msg, () => addClient({
+      it(msg, () => assert.rejects(addClient({
         [prop]: value,
-      }, configuration).then(fail, (err) => {
+      }, configuration), (err) => {
         if (prop === 'redirect_uris') {
           expect(err.message).to.equal('invalid_redirect_uri');
         } else {
           expect(err.message).to.equal('invalid_client_metadata');
         }
         expect(err.error_description).to.equal(`${prop} must be an array`);
+        return true;
       }));
     });
   };
@@ -105,15 +110,16 @@ describe('Client metadata validation', () => {
       let msg = util.format('must be a boolean, %j provided', value);
       if (metadata) msg = util.format(`${msg}, [client %j]`, omit(metadata, ['jwks.keys']));
       if (configuration) msg = util.format(`${msg}, [provider %j]`, configuration);
-      it(msg, () => addClient({
+      it(msg, () => assert.rejects(addClient({
         [prop]: value,
-      }, configuration).then(fail, (err) => {
+      }, configuration), (err) => {
         if (prop === 'redirect_uris') {
           expect(err.message).to.equal('invalid_redirect_uri');
         } else {
           expect(err.message).to.equal('invalid_client_metadata');
         }
         expect(err.error_description).to.equal(`${prop} must be a boolean`);
+        return true;
       }));
     });
   };
@@ -132,19 +138,21 @@ describe('Client metadata validation', () => {
     }));
   };
 
-  const isRequired = (prop, values, configuration) => {
+  const isRequired = (prop, values, configuration, metadata) => {
     (values || [null, undefined, '']).forEach((value) => {
       let msg = util.format('is required, %j provided', value);
       if (configuration) msg = util.format(`${msg}, [provider %j]`, configuration);
-      it(msg, () => addClient({
+      it(msg, () => assert.rejects(addClient({
         [prop]: value,
-      }, configuration).then(fail, (err) => {
+        ...metadata,
+      }, configuration), (err) => {
         if (prop === 'redirect_uris') {
           expect(err.message).to.equal('invalid_redirect_uri');
         } else {
           expect(err.message).to.equal('invalid_client_metadata');
         }
         expect(err.error_description).to.equal(`${prop} is mandatory property`);
+        return true;
       }));
     });
   };
@@ -168,16 +176,17 @@ describe('Client metadata validation', () => {
     let msg = util.format('rejects %j', value);
     if (metadata) msg = util.format(`${msg}, [client %j]`, omit(metadata, ['jwks.keys']));
     if (configuration) msg = util.format(`${msg}, [provider %j]`, configuration);
-    it(msg, () => addClient({ ...metadata, [prop]: value }, configuration).then(fail, (err) => {
+    // eslint-disable-next-line max-len
+    it(msg, () => assert.rejects(addClient({ ...metadata, [prop]: value }, configuration), (err) => {
       if (prop === 'redirect_uris') {
         expect(err.message).to.equal('invalid_redirect_uri');
       } else {
         expect(err.message).to.equal('invalid_client_metadata');
       }
       if (description) {
-        const assert = description.exec ? 'match' : 'equal';
-        expect(err.error_description).to[assert](description);
+        expect(err.error_description).to[description.exec ? 'match' : 'equal'](description);
       }
+      return true;
     }));
   };
 
@@ -633,11 +642,12 @@ describe('Client metadata validation', () => {
       mustBeString(this.title, undefined, {
         jwks: { keys: [sigKey] },
       }, configuration);
-      it('is required when id_token_encrypted_response_enc is also provided', () => addClient({
+      it('is required when id_token_encrypted_response_enc is also provided', () => assert.rejects(addClient({
         id_token_encrypted_response_enc: 'whatever',
-      }, configuration).then(fail, (err) => {
+      }, configuration), (err) => {
         expect(err.message).to.equal('invalid_client_metadata');
         expect(err.error_description).to.equal('id_token_encrypted_response_alg is mandatory property when id_token_encrypted_response_enc is provided');
+        return true;
       }));
       allows(this.title, 'dir', undefined, configuration);
       [
@@ -685,11 +695,12 @@ describe('Client metadata validation', () => {
       mustBeString(this.title, undefined, {
         jwks: { keys: [sigKey] },
       }, configuration);
-      it('is required when userinfo_encrypted_response_enc is also provided', () => addClient({
+      it('is required when userinfo_encrypted_response_enc is also provided', () => assert.rejects(addClient({
         userinfo_encrypted_response_enc: 'whatever',
-      }, configuration).then(fail, (err) => {
+      }, configuration), (err) => {
         expect(err.message).to.equal('invalid_client_metadata');
         expect(err.error_description).to.equal('userinfo_encrypted_response_alg is mandatory property when userinfo_encrypted_response_enc is provided');
+        return true;
       }));
       allows(this.title, 'dir', undefined, configuration);
       [
@@ -738,11 +749,12 @@ describe('Client metadata validation', () => {
       mustBeString(this.title, undefined, {
         jwks: { keys: [sigKey] },
       }, configuration);
-      it('is required when introspection_encrypted_response_enc is also provided', () => addClient({
+      it('is required when introspection_encrypted_response_enc is also provided', () => assert.rejects(addClient({
         introspection_encrypted_response_enc: 'whatever',
-      }, configuration).then(fail, (err) => {
+      }, configuration), (err) => {
         expect(err.message).to.equal('invalid_client_metadata');
         expect(err.error_description).to.equal('introspection_encrypted_response_alg is mandatory property when introspection_encrypted_response_enc is provided');
+        return true;
       }));
       allows(this.title, 'dir', undefined, configuration);
       [
@@ -791,11 +803,12 @@ describe('Client metadata validation', () => {
       mustBeString(this.title, undefined, {
         jwks: { keys: [sigKey] },
       }, configuration);
-      it('is required when authorization_encrypted_response_enc is also provided', () => addClient({
+      it('is required when authorization_encrypted_response_enc is also provided', () => assert.rejects(addClient({
         authorization_encrypted_response_enc: 'whatever',
-      }, configuration).then(fail, (err) => {
+      }, configuration), (err) => {
         expect(err.message).to.equal('invalid_client_metadata');
         expect(err.error_description).to.equal('authorization_encrypted_response_alg is mandatory property when authorization_encrypted_response_enc is provided');
+        return true;
       }));
       allows(this.title, 'dir', undefined, configuration);
       [
@@ -850,11 +863,12 @@ describe('Client metadata validation', () => {
       defaultsTo(this.title, undefined);
       defaultsTo(this.title, undefined, undefined, configuration);
       mustBeString(this.title, undefined, undefined, configuration);
-      it('is required when request_object_encryption_enc is also provided', () => addClient({
+      it('is required when request_object_encryption_enc is also provided', () => assert.rejects(addClient({
         request_object_encryption_enc: 'whatever',
-      }, configuration).then(fail, (err) => {
+      }, configuration), (err) => {
         expect(err.message).to.equal('invalid_client_metadata');
         expect(err.error_description).to.equal('request_object_encryption_alg is mandatory property when request_object_encryption_enc is provided');
+        return true;
       }));
       allows(this.title, 'dir', undefined, configuration);
       [
@@ -916,6 +930,96 @@ describe('Client metadata validation', () => {
     });
   });
 
+  describe('features.ciba', () => {
+    const configuration = { features: { ciba: { enabled: true, deliveryModes: ['ping', 'poll'] }, requestObjects: { request: false, requestUri: false } } };
+    const metadata = {
+      grant_types: ['urn:openid:params:grant-type:ciba'],
+      redirect_uris: [],
+      response_types: [],
+      backchannel_token_delivery_mode: 'poll',
+    };
+
+    context('backchannel_user_code_parameter', function () {
+      mustBeBoolean(this.title, undefined, configuration);
+      defaultsTo(this.title, false, undefined, configuration);
+    });
+
+    context('backchannel_token_delivery_mode', function () {
+      mustBeString(this.title, undefined, undefined, configuration);
+      isRequired(this.title, undefined, configuration, {
+        ...metadata, backchannel_token_delivery_mode: undefined,
+      });
+    });
+
+    context('backchannel_client_notification_endpoint', function () {
+      isRequired(this.title, undefined, configuration, { ...metadata, backchannel_token_delivery_mode: 'ping' });
+      mustBeUri(this.title, ['https'], configuration, { ...metadata, backchannel_token_delivery_mode: 'ping' });
+    });
+
+    context('backchannel_authentication_request_signing_alg', function () {
+      mustBeString(this.title, undefined, metadata, configuration);
+      [
+        'RS256', 'RS384', 'RS512',
+        'PS256', 'PS384', 'PS512', 'ES256', 'ES384', 'ES512', 'EdDSA',
+      ].forEach((alg) => {
+        allows(this.title, alg, { ...metadata, jwks: { keys: [sigKey] } }, configuration);
+      });
+      rejects(this.title, 'not-an-alg', undefined, metadata, configuration);
+      rejects(this.title, 'none', undefined, metadata, configuration);
+      rejects(this.title, 'HS256', undefined, metadata, configuration);
+      rejects(this.title, 'HS384', undefined, metadata, configuration);
+      rejects(this.title, 'HS512', undefined, metadata, configuration);
+      defaultsTo(this.title, undefined, undefined, configuration);
+    });
+
+    allows('subject_type', 'pairwise', {
+      ...metadata, token_endpoint_auth_method: 'private_key_jwt', subject_type: 'pairwise', jwks_uri: 'https://rp.example.com/jwks',
+    }, { ...configuration, subjectTypes: ['pairwise', 'public'] }, (client) => {
+      expect(sectorIdentifier(client)).to.eql('rp.example.com');
+    });
+    isRequired('jwks_uri', [undefined], { ...configuration, subjectTypes: ['pairwise', 'public'] }, { ...metadata, subject_type: 'pairwise' });
+    isRequired('sector_identifier_uri', [undefined], { ...configuration, subjectTypes: ['pairwise', 'public'] }, {
+      ...metadata, jwks_uri: 'https://rp.example.com/sector', subject_type: 'pairwise', response_types: ['code'], grant_types: [...metadata.grant_types, 'authorization_code'], redirect_uris: ['https://rp.example.com/cb'],
+    });
+    rejects('subject_type', 'pairwise', 'pairwise urn:openid:params:grant-type:ciba clients must utilize private_key_jwt or self_signed_tls_client_auth token endpoint authentication methods', { ...metadata, subject_type: 'pairwise', jwks_uri: 'https://rp.example.com/jwks' }, { ...configuration, subjectTypes: ['pairwise', 'public'] });
+  });
+
+  describe('features.deviceFlow', () => {
+    const configuration = { features: { deviceFlow: { enabled: true } } };
+    const metadata = {
+      grant_types: ['urn:ietf:params:oauth:grant-type:device_code'],
+      response_types: [],
+      redirect_uris: undefined,
+    };
+
+    defaultsTo('redirect_uris', [], metadata, configuration);
+    defaultsTo('redirect_uris', ['https://rp.example.com/callback'], metadata, { ...configuration, clientDefaults: { redirect_uris: ['https://rp.example.com/callback'] } });
+    rejects('redirect_uris', null, 'redirect_uris must be an array', metadata, configuration);
+    allows('subject_type', 'pairwise', {
+      ...metadata, token_endpoint_auth_method: 'private_key_jwt', subject_type: 'pairwise', jwks_uri: 'https://rp.example.com/jwks',
+    }, { ...configuration, subjectTypes: ['pairwise', 'public'] }, (client) => {
+      expect(sectorIdentifier(client)).to.eql('rp.example.com');
+    });
+    isRequired('jwks_uri', [undefined], { ...configuration, subjectTypes: ['pairwise', 'public'] }, { ...metadata, subject_type: 'pairwise' });
+    isRequired('sector_identifier_uri', [undefined], { ...configuration, subjectTypes: ['pairwise', 'public'] }, {
+      ...metadata, jwks_uri: 'https://rp.example.com/sector', subject_type: 'pairwise', response_types: ['code'], grant_types: [...metadata.grant_types, 'authorization_code'], redirect_uris: ['https://rp.example.com/cb'],
+    });
+    rejects('subject_type', 'pairwise', 'pairwise urn:ietf:params:oauth:grant-type:device_code clients must utilize private_key_jwt or self_signed_tls_client_auth token endpoint authentication methods', { ...metadata, subject_type: 'pairwise', jwks_uri: 'https://rp.example.com/jwks' }, { ...configuration, subjectTypes: ['pairwise', 'public'] });
+  });
+
+  describe('features.clientCredentials', () => {
+    const configuration = { features: { clientCredentials: { enabled: true } } };
+    const metadata = {
+      grant_types: ['client_credentials'],
+      response_types: [],
+      redirect_uris: undefined,
+    };
+
+    defaultsTo('redirect_uris', [], metadata, configuration);
+    defaultsTo('redirect_uris', ['https://rp.example.com/callback'], metadata, { ...configuration, clientDefaults: { redirect_uris: ['https://rp.example.com/callback'] } });
+    rejects('redirect_uris', null, 'redirect_uris must be an array', metadata, configuration);
+  });
+
   context('jwks', function () {
     const configuration = {
       features: {
@@ -924,6 +1028,7 @@ describe('Client metadata validation', () => {
         revocation: { enabled: true },
         encryption: { enabled: true },
         jwtUserinfo: { enabled: true },
+        ciba: { enabled: true },
       },
     };
 
@@ -945,12 +1050,16 @@ describe('Client metadata validation', () => {
         [`${endpoint}_endpoint_auth_method`]: 'private_key_jwt',
       }, configuration);
     });
-    rejects(this.title, undefined, 'jwks or jwks_uri is mandatory for this client', {
-      request_object_signing_alg: 'RS256',
-    });
-    rejects(this.title, undefined, 'jwks or jwks_uri is mandatory for this client', {
-      request_object_signing_alg: 'ES384',
-    });
+
+    // eslint-disable-next-line no-restricted-syntax
+    for (const prop of ['request_object_signing_alg', 'backchannel_authentication_request_signing_alg']) {
+      rejects(this.title, undefined, 'jwks or jwks_uri is mandatory for this client', {
+        [prop]: 'RS256',
+      }, configuration);
+      rejects(this.title, undefined, 'jwks or jwks_uri is mandatory for this client', {
+        [prop]: 'ES384',
+      }, configuration);
+    }
 
     [
       'id_token_encrypted_response_alg',
@@ -1133,6 +1242,26 @@ describe('Client metadata validation', () => {
     expect(client.grantTypes).not.to.be.empty;
     expect(client.responseTypes).to.be.empty;
     expect(client.redirectUris).to.be.empty;
+  }));
+
+  it('fails to determine sector identifier', () => addClient({
+    client_id: 'authorization-server',
+    client_secret: 'foobar',
+    redirect_uris: [],
+    response_types: [],
+    grant_types: [],
+    subject_type: 'pairwise',
+  }, { subjectTypes: ['pairwise', 'public'] }).then((client) => {
+    expect(client.grantTypes).to.be.empty;
+    expect(client.responseTypes).to.be.empty;
+    expect(client.redirectUris).to.be.empty;
+    expect(() => sectorIdentifier(client)).to.throw();
+    try {
+      sectorIdentifier(client);
+    } catch (err) {
+      expect(err.error).to.eql('invalid_client_metadata');
+      expect(err.error_description).to.eql('could not determine a sector identifier');
+    }
   }));
 
   context('clientDefaults configuration option allows for default client metadata to be changed', () => {
