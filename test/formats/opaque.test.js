@@ -1,13 +1,15 @@
-const sinon = require('sinon').createSandbox();
-const { expect } = require('chai');
+import { createSandbox } from 'sinon';
+import { expect } from 'chai';
 
-const epochTime = require('../../lib/helpers/epoch_time');
-const bootstrap = require('../test_helper');
+import epochTime from '../../lib/helpers/epoch_time.js';
+import bootstrap from '../test_helper.js';
+
+const sinon = createSandbox();
 
 const { spy, match: { string, number }, assert } = sinon;
 
 describe('opaque storage', () => {
-  before(bootstrap(__dirname));
+  before(bootstrap(import.meta.url));
   const accountId = 'account';
   const claims = {};
   const clientId = 'client';
@@ -38,6 +40,7 @@ describe('opaque storage', () => {
   const iiat = epochTime();
   const rotations = 1;
   const extra = { foo: 'bar' };
+  const dpopJkt = 'cbaZgHZazjgQq0Q2-Hy_o2-OCDpPu02S30lNhTsNU1Q';
 
   // TODO: add Session and Interaction
 
@@ -46,7 +49,7 @@ describe('opaque storage', () => {
     accountId, claims, grantId, scope, sid, consumed, acr, amr, authTime, nonce,
     redirectUri, codeChallenge, codeChallengeMethod, aud, error, errorDescription, params,
     userCode, deviceInfo, gty, resource, policies, sessionUid, expiresWithSession,
-    'x5t#S256': s256, inFlight, iiat, rotations, extra, jkt: s256,
+    'x5t#S256': s256, inFlight, iiat, rotations, extra, jkt: s256, dpopJkt,
   };
   /* eslint-enable object-property-newline */
 
@@ -81,6 +84,14 @@ describe('opaque storage', () => {
     });
   });
 
+  it('for AccessToken extraTokenClaims gets assigned upon save()', async function () {
+    const client = await this.provider.Client.find(clientId);
+    const token = new this.provider.AccessToken({ client, ...fullPayload, extra: undefined });
+    expect(token.extra).to.eql(undefined);
+    await token.save();
+    expect(token.extra).to.eql(extra);
+  });
+
   it('for AuthorizationCode', async function () {
     const kind = 'AuthorizationCode';
     const upsert = spy(this.TestAdapter.for('AuthorizationCode'), 'upsert');
@@ -111,6 +122,7 @@ describe('opaque storage', () => {
       sid,
       sessionUid,
       expiresWithSession,
+      dpopJkt,
     });
   });
 
@@ -238,6 +250,14 @@ describe('opaque storage', () => {
       jkt: s256,
       extra,
     });
+  });
+
+  it('for ClientCredentials extraTokenClaims gets assigned upon save()', async function () {
+    const client = await this.provider.Client.find(clientId);
+    const token = new this.provider.ClientCredentials({ client, ...fullPayload, extra: undefined });
+    expect(token.extra).to.eql(undefined);
+    await token.save();
+    expect(token.extra).to.eql(extra);
   });
 
   it('for InitialAccessToken', async function () {

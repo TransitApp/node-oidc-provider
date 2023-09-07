@@ -1,25 +1,29 @@
 /* eslint-disable no-console */
 
-const path = require('path');
+import * as path from 'node:path';
+import { promisify } from 'node:util';
 
-const render = require('koa-ejs');
-const helmet = require('koa-helmet'); // eslint-disable-line import/no-unresolved
+import { dirname } from 'desm';
+import render from '@koa/ejs';
+import helmet from 'helmet';
 
-const { Provider } = require('../lib'); // require('oidc-provider');
+import Provider from '../lib/index.js'; // from 'oidc-provider';
 
-const Account = require('./support/account');
-const configuration = require('./support/configuration');
-const routes = require('./routes/koa');
+import Account from './support/account.js';
+import configuration from './support/configuration.js';
+import routes from './routes/koa.js';
+
+const __dirname = dirname(import.meta.url);
 
 const { PORT = 3000, ISSUER = `http://localhost:${PORT}` } = process.env;
 configuration.findAccount = Account.findAccount;
 
 let server;
 
-(async () => {
+try {
   let adapter;
   if (process.env.MONGODB_URI) {
-    adapter = require('./adapters/mongodb'); // eslint-disable-line global-require
+    ({ default: adapter } = await import('./adapters/mongodb.js'));
     await adapter.connect();
   }
 
@@ -27,7 +31,22 @@ let server;
 
   const provider = new Provider(ISSUER, { adapter, ...configuration });
 
-  provider.use(helmet());
+  const directives = helmet.contentSecurityPolicy.getDefaultDirectives();
+  delete directives['form-action'];
+  const pHelmet = promisify(helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives,
+    },
+  }));
+
+  provider.use(async (ctx, next) => {
+    const origSecure = ctx.req.secure;
+    ctx.req.secure = ctx.request.secure;
+    await pHelmet(ctx.req, ctx.res);
+    ctx.req.secure = origSecure;
+    return next();
+  });
 
   if (prod) {
     provider.proxy = true;
@@ -56,8 +75,8 @@ let server;
   server = provider.listen(PORT, () => {
     console.log(`application is listening on port ${PORT}, check its /.well-known/openid-configuration`);
   });
-})().catch((err) => {
-  if (server && server.listening) server.close();
+} catch (err) {
+  if (server?.listening) server.close();
   console.error(err);
   process.exitCode = 1;
-});
+}
