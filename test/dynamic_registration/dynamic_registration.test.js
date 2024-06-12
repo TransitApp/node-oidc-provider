@@ -119,7 +119,7 @@ describe('registration features', () => {
         i(this.provider).configuration('features.registration').issueRegistrationAccessToken = this.orig;
       });
 
-      it('omits issuing a registration access token and does not return registration_client_uri', function () {
+      it('issues a registration access token and does return registration_client_uri', function () {
         return this.agent.post('/reg')
           .send({
             redirect_uris: ['https://client.example.com/cb'],
@@ -154,7 +154,7 @@ describe('registration features', () => {
         i(this.provider).configuration('features.registration').issueRegistrationAccessToken = this.orig;
       });
 
-      it('omits issuing a registration access token and does not return registration_client_uri', function () {
+      it('issues a registration access token and does return registration_client_uri', function () {
         return this.agent.post('/reg')
           .send({
             redirect_uris: ['https://client.example.com/cb'],
@@ -251,8 +251,7 @@ describe('registration features', () => {
         .send({
           redirect_uris: ['https://client.example.com/cb'],
         })
-        .expect('pragma', 'no-cache')
-        .expect('cache-control', 'no-cache, no-store');
+        .expect('cache-control', 'no-store');
     });
 
     it('stores the client and emits an event', function () {
@@ -522,8 +521,7 @@ describe('registration features', () => {
     it('returns token-endpoint-like cache headers', function () {
       return this.agent.get(`/reg/${this.clientId}`)
         .auth(this.token, { type: 'bearer' })
-        .expect('pragma', 'no-cache')
-        .expect('cache-control', 'no-cache, no-store');
+        .expect('cache-control', 'no-store');
     });
 
     it('validates client is a valid client', function () {
@@ -567,8 +565,7 @@ describe('registration features', () => {
 
       return this.agent.get('/reg/foobar')
         .auth(this.token, { type: 'bearer' })
-        .expect('pragma', 'no-cache')
-        .expect('cache-control', 'no-cache, no-store')
+        .expect('cache-control', 'no-store')
         .expect(this.failWith(401, 'invalid_token', 'invalid token provided'))
         .expect(() => {
           expect(spy.calledOnce).to.be.true;

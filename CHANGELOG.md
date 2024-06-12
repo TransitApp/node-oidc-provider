@@ -2,6 +2,187 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [7.14.3](https://github.com/panva/node-oidc-provider/compare/v7.14.2...v7.14.3) (2022-12-01)
+
+
+### Fixes
+
+* memory adapter grant references for intended models ([357ced3](https://github.com/panva/node-oidc-provider/commit/357ced3924b71819be144f184861a8c78c27fde6))
+
+## [7.14.2](https://github.com/panva/node-oidc-provider/compare/v7.14.1...v7.14.2) (2022-11-30)
+
+
+### Fixes
+
+* build client symmetric keys from all client signing alg properties ([a26f87d](https://github.com/panva/node-oidc-provider/commit/a26f87d74fcc38e48da2814b9e41e84f7e64e784))
+
+## [7.14.1](https://github.com/panva/node-oidc-provider/compare/v7.14.0...v7.14.1) (2022-11-22)
+
+
+### Fixes
+
+* url encode client_id returned in registration responses ([500dfeb](https://github.com/panva/node-oidc-provider/commit/500dfeb763bd8ea445ad3c79be8e543ba34af275))
+
+## [7.14.0](https://github.com/panva/node-oidc-provider/compare/v7.13.0...v7.14.0) (2022-11-09)
+
+
+### Features
+
+* graduate jwtResponseModes (JARM) feature as stable ([7b878cd](https://github.com/panva/node-oidc-provider/commit/7b878cd195da05024a45c0e347546f0d4ee862c5))
+
+## [7.13.0](https://github.com/panva/node-oidc-provider/compare/v7.12.0...v7.13.0) (2022-10-26)
+
+
+### Features
+
+* enable v18 LTS in package.json ([e423b4d](https://github.com/panva/node-oidc-provider/commit/e423b4d87a6caf490d993e8ae4e2b428504f7d8b))
+
+## [7.12.0](https://github.com/panva/node-oidc-provider/compare/v7.11.5...v7.12.0) (2022-09-13)
+
+
+### Features
+
+* graduate backchannelLogout feature as stable ([617e260](https://github.com/panva/node-oidc-provider/commit/617e2602d0e862fdbdec4d501555097596378d96))
+
+
+### Fixes
+
+* ignore instead of throw on unverified post_logout_redirect_uri ([04b1096](https://github.com/panva/node-oidc-provider/commit/04b1096ac1507cab15a680ebde91cc33f6d636eb))
+
+## [7.11.5](https://github.com/panva/node-oidc-provider/compare/v7.11.4...v7.11.5) (2022-07-16)
+
+
+### Fixes
+
+* **PAR:** set additional stored PAR object properties on plain requests ([1be15fa](https://github.com/panva/node-oidc-provider/commit/1be15faed0a704bf5a2c34121d8131e00f23c734))
+* **PAR:** skip stored PAR object alg validation when it's being used ([406caa4](https://github.com/panva/node-oidc-provider/commit/406caa48f0c5929666e43a7b76af9a393c4631d2))
+
+## [7.11.4](https://github.com/panva/node-oidc-provider/compare/v7.11.3...v7.11.4) (2022-07-04)
+
+
+### Fixes
+
+* arrow & static class methods as adapter factories ([#1197](https://github.com/panva/node-oidc-provider/issues/1197)) ([cee552f](https://github.com/panva/node-oidc-provider/commit/cee552f0403863d9a1b8495b93098cc706f7f625))
+
+## [7.11.3](https://github.com/panva/node-oidc-provider/compare/v7.11.2...v7.11.3) (2022-06-13)
+
+
+### Fixes
+
+* httpOptions helper ([#1194](https://github.com/panva/node-oidc-provider/issues/1194)) ([80fe961](https://github.com/panva/node-oidc-provider/commit/80fe9619cd679b5988820e5389b027a4b0a24ca2))
+
+## [7.11.2](https://github.com/panva/node-oidc-provider/compare/v7.11.1...v7.11.2) (2022-05-16)
+
+
+### Fixes
+
+* updated `signed` to `trusted` in the Interaction model ([#1192](https://github.com/panva/node-oidc-provider/issues/1192)) ([eb91aea](https://github.com/panva/node-oidc-provider/commit/eb91aea9c3a50284e71f43ce2fe7f31ebdd83bb5))
+
+## [7.11.1](https://github.com/panva/node-oidc-provider/compare/v7.11.0...v7.11.1) (2022-04-25)
+
+
+### Fixes
+
+* client schema invalidation code not set ([edf22fb](https://github.com/panva/node-oidc-provider/commit/edf22fba1ca8fb21e528c6755f74ae48a9d6704b))
+
+## [7.11.0](https://github.com/panva/node-oidc-provider/compare/v7.10.6...v7.11.0) (2022-04-20)
+
+
+### Features
+
+* allow native app callbacks in client post_logout_redirect_uris ([3fca22b](https://github.com/panva/node-oidc-provider/commit/3fca22bb5dc8dc529c08c596109988a35e110f74))
+* bump backchannelLogout to draft-07 ([95611d9](https://github.com/panva/node-oidc-provider/commit/95611d9978c1f5c10ae9dbe1d49186983a3b01df))
+* graduate issAuthResp feature as stable and enable by default ([e774f60](https://github.com/panva/node-oidc-provider/commit/e774f606ea63271c971aad3d7b5730d0f16c0f52))
+
+
+### Fixes
+
+* ensure jwt replay detection takes clockTolerance into account ([f167233](https://github.com/panva/node-oidc-provider/commit/f1672336750b8a23ad0c0fa9f3bb2f91ad61397d))
+
+## [7.10.6](https://github.com/panva/node-oidc-provider/compare/v7.10.5...v7.10.6) (2022-01-07)
+
+
+### Fixes
+
+* substr > slice change in mountPath should have been substring ([adc0d63](https://github.com/panva/node-oidc-provider/commit/adc0d63193c131d7a45f83e4195360a62ef2c522))
+
+## [7.10.5](https://github.com/panva/node-oidc-provider/compare/v7.10.4...v7.10.5) (2022-01-04)
+
+
+### Fixes
+
+* **resourceIndicators:** await the result of useGrantedResource ([#1173](https://github.com/panva/node-oidc-provider/issues/1173)) ([64a8028](https://github.com/panva/node-oidc-provider/commit/64a802884dc4b990847cda4eacb3dba619ae379d))
+
+## [7.10.4](https://github.com/panva/node-oidc-provider/compare/v7.10.3...v7.10.4) (2021-12-05)
+
+
+### Fixes
+
+* add iss to error responses when issAuthResp is enabled ([05ac3a8](https://github.com/panva/node-oidc-provider/commit/05ac3a8cc51f18d33e17982b81f1996e6a327e8c))
+
+## [7.10.3](https://github.com/panva/node-oidc-provider/compare/v7.10.2...v7.10.3) (2021-12-04)
+
+
+### Fixes
+
+* expose invalid_dpop_proof error code and set it to 401 on userinfo ([2628d7e](https://github.com/panva/node-oidc-provider/commit/2628d7e4b81d22a3972e8f82c94b9ec4dd9835d4))
+
+## [7.10.2](https://github.com/panva/node-oidc-provider/compare/v7.10.1...v7.10.2) (2021-11-28)
+
+
+### Fixes
+
+* use paseto configuration from `getResourceServerInfo` ([#1150](https://github.com/panva/node-oidc-provider/issues/1150)) ([02c821d](https://github.com/panva/node-oidc-provider/commit/02c821d7f16c6421d30ffc449366d4d79d951830))
+
+## [7.10.1](https://github.com/panva/node-oidc-provider/compare/v7.10.0...v7.10.1) (2021-11-16)
+
+
+### Fixes
+
+* clearly mark that multiple pop mechanisms are not allowed ([49eed4c](https://github.com/panva/node-oidc-provider/commit/49eed4c20b28ef95e7a1a6315783dd3956b8c84a))
+
+## [7.10.0](https://github.com/panva/node-oidc-provider/compare/v7.9.0...v7.10.0) (2021-11-04)
+
+
+### Features
+
+* duplicate iss and aud as JWE Header Parameters ([b26ea44](https://github.com/panva/node-oidc-provider/commit/b26ea4465b3e45b8e63e69bd08c5de525494dea8))
+
+## [7.9.0](https://github.com/panva/node-oidc-provider/compare/v7.8.1...v7.9.0) (2021-10-26)
+
+
+### Features
+
+* add LTS Gallium as a supported runtime version ([19b4d0d](https://github.com/panva/node-oidc-provider/commit/19b4d0daa4ca1e05acd2b5651545251fe937ff39))
+
+## [7.8.1](https://github.com/panva/node-oidc-provider/compare/v7.8.0...v7.8.1) (2021-10-12)
+
+
+### Bug Fixes
+
+* use insufficient_scope instead of invalid_scope at userinfo_endpoint ([ba8a8f0](https://github.com/panva/node-oidc-provider/commit/ba8a8f0188c9a73a0ab0f8b974bea49feb2a87a6))
+
+## [7.8.0](https://github.com/panva/node-oidc-provider/compare/v7.7.0...v7.8.0) (2021-09-15)
+
+
+### Features
+
+* OAuth 2.0 Pushed Authorization Requests (PAR) is now a stable feature ([3c54d8d](https://github.com/panva/node-oidc-provider/commit/3c54d8ddb85d72fc9432c283b3bea417a895afca))
+
+## [7.7.0](https://github.com/panva/node-oidc-provider/compare/v7.6.0...v7.7.0) (2021-09-02)
+
+
+### Features
+
+* CIBA Core 1.0 is now a stable feature ([cc8bc0d](https://github.com/panva/node-oidc-provider/commit/cc8bc0d651e8111a144cb3eeaf7f61600dd074f2))
+
+## [7.6.0](https://github.com/panva/node-oidc-provider/compare/v7.5.4...v7.6.0) (2021-08-03)
+
+
+### Features
+
+* support v3.local, v3.public, and v4.public paseto access tokens format ([aca5813](https://github.com/panva/node-oidc-provider/commit/aca5813a5b7e669f30894102ad925b1aec3f3467))
+
 ## [7.5.4](https://github.com/panva/node-oidc-provider/compare/v7.5.3...v7.5.4) (2021-07-21)
 
 

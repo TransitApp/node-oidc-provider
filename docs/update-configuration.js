@@ -123,15 +123,15 @@ const props = [
 
       if (nextIsOption) {
         nextIsOption = false;
-        option = blocks[strLine.substring(2)] = new Block(); // eslint-disable-line no-multi-assign
+        option = blocks[strLine.slice(2)] = new Block(); // eslint-disable-line no-multi-assign
         return;
       }
 
       const next = props.find((prop) => {
         if (
           prop.startsWith('@')
-            ? strLine.substring(2, 2 + prop.length) === prop
-            : strLine.substring(2, 2 + prop.length + 1) === `${prop}:`
+            ? strLine.slice(2, 2 + prop.length) === prop
+            : strLine.slice(2, 2 + prop.length + 1) === `${prop}:`
         ) {
           let override;
           if (prop === 'example' && option.example) {
@@ -139,6 +139,12 @@ const props = [
               .filter((p) => p.startsWith('example'))
               .map((e) => parseInt(e.slice(-1), 10) || 0));
             override = `example${i + 1}`;
+          }
+          if (prop === 'recommendation' && option.recommendation) {
+            const i = Math.max(...Object.keys(option)
+              .filter((p) => p.startsWith('recommendation'))
+              .map((e) => parseInt(e.slice(-1), 10) || 0));
+            override = `recommendation${i + 1}`;
           }
           option.active = override || prop;
           option.write(line.slice(prop.length + 4));
@@ -253,10 +259,8 @@ const props = [
       append(`${capitalizeSentences(section.description.join(' '))}  \n\n`);
     }
 
-    ['recommendation'].forEach((option) => {
-      if (section[option]) {
-        append(`_**${option}**_: ${section[option].join(' ')}  \n\n`);
-      }
+    Object.keys(section).filter((x) => x.startsWith('recommendation')).forEach((prop) => {
+      append(`_**recommendation**_: ${section[prop].join(' ')}  \n\n`);
     });
 
     if (!('@nodefault' in section)) {
