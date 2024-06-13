@@ -1,10 +1,8 @@
 /* eslint-env mocha */
-/* eslint-disable no-bitwise, func-names, no-console, no-restricted-syntax, no-await-in-loop */
+/* eslint-disable no-bitwise, func-names, no-console, no-restricted-syntax, no-await-in-loop, no-multi-assign, max-len */
 
 const { strict: assert } = require('assert');
 const fs = require('fs');
-
-const parallel = require('mocha.parallel');
 
 const debug = require('./debug');
 const API = require('./api');
@@ -28,12 +26,31 @@ const configuration = JSON.parse(fs.readFileSync(CONFIGURATION));
 const runner = new API({ baseUrl: SUITE_BASE_URL, bearerToken: SUITE_ACCESS_TOKEN });
 
 if ('alias' in configuration) {
-  configuration.alias = `${configuration.alias}-${Object.values(VARIANT).join('-')}`;
+  configuration.alias = `${configuration.alias}-${Object.values(VARIANT).sort().join('-')}`;
 }
 
-if (PLAN_NAME === 'fapi1-advanced-final-test-plan') {
+let override;
+// eslint-disable-next-line default-case
+switch (PLAN_NAME) {
+  case 'fapi1-advanced-final-test-plan': {
+    override = 'fapi1-advanced-final';
+    const auth = VARIANT.client_auth_type === 'mtls' ? 'mtls' : 'pkjwt';
+    configuration.client.client_id = `1.0-final-${auth}-one`;
+    configuration.client2.client_id = `1.0-final-${auth}-two`;
+    break;
+  }
+  case 'fapi-rw-id2-test-plan': {
+    override = 'fapi-rw-id2';
+    const auth = VARIANT.client_auth_type === 'mtls' ? 'mtls' : 'pkjwt';
+    configuration.client.client_id = `1.0-id2-${auth}-one`;
+    configuration.client2.client_id = `1.0-id2-${auth}-two`;
+    break;
+  }
+}
+
+if (override) {
   configuration.override = Object.entries(configuration.override).reduce((acc, [key, value]) => {
-    acc[key.replace('fapi-rw-id2', 'fapi1-advanced-final')] = value;
+    acc[key.replace('REPLACEME', override)] = value;
     return acc;
   }, {});
 }
@@ -53,45 +70,32 @@ runner.createTestPlan({
   debug('%s/plan-detail.html?plan=%s', SUITE_BASE_URL, PLAN_ID);
   debug('modules to test %O', MODULES);
 
-  if (fs.existsSync('.failed')) {
-    fs.unlinkSync('.failed');
-  }
-
+  let download = false;
   describe(PLAN_NAME, () => {
     after(() => {
-      if (fs.existsSync('.failed')) {
-        fs.unlinkSync('.failed');
-        process.exitCode |= 1;
-        return runner.downloadArtifact({ planId: PLAN_ID });
+      if (download) {
+        runner.downloadArtifact({ planId: PLAN_ID });
       }
-      return undefined;
     });
 
-    parallel('', () => {
-      const skips = SKIP ? SKIP.split(',') : [];
-      for (const { testModule, variant } of MODULES) {
-        const test = skips.includes(testModule) ? it.skip : it;
-        test(`${testModule}, ${JSON.stringify(variant)}`, async () => {
-          debug('\n\nRunning test module: %s', testModule);
-          const { id: moduleId } = await runner.createTestFromPlan({
-            plan: PLAN_ID, test: testModule, variant,
-          });
-          debug('Created test module, new id: %s', moduleId);
-          debug('%s/log-detail.html?log=%s', SUITE_BASE_URL, moduleId);
-          try {
-            await runner.waitForState({ moduleId });
-          } catch (err) {
-            fs.writeFileSync('.failed', Buffer.alloc(0));
-            throw err;
-          }
+    afterEach(function () {
+      if (this.currentTest.state === 'failed') {
+        download = true;
+      }
+    });
+
+    const skips = SKIP ? SKIP.split(',') : [];
+    for (const { testModule, variant } of MODULES) {
+      const test = skips.includes(testModule) ? it.skip : it;
+      test(`${testModule}, ${JSON.stringify(variant)}`, async () => {
+        debug('\n\nRunning test module: %s', testModule);
+        const { id: moduleId } = await runner.createTestFromPlan({
+          plan: PLAN_ID, test: testModule, variant,
         });
-      }
-    });
-
-    if (configuration.alias) {
-      parallel.limit(1);
-    } else {
-      parallel.limit(10);
+        debug('Created test module, new id: %s', moduleId);
+        debug('%s/log-detail.html?log=%s', SUITE_BASE_URL, moduleId);
+        await runner.waitForState({ moduleId });
+      });
     }
   });
 

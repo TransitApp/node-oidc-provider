@@ -1,6 +1,7 @@
 const { strict: assert } = require('assert');
 const util = require('util');
 
+const sinon = require('sinon');
 const { expect } = require('chai');
 const camelCase = require('lodash/camelCase');
 const merge = require('lodash/merge');
@@ -370,6 +371,82 @@ describe('Client metadata validation', () => {
       grant_types: ['implicit'],
       response_types: ['id_token'],
     });
+    it('has an schema invalidation hook for forcing https on implicit', async () => {
+      const sandbox = sinon.createSandbox();
+      sandbox.spy(DefaultProvider.Client.Schema.prototype, 'invalidate');
+      await addClient({
+        grant_types: ['implicit'],
+        response_types: ['id_token'],
+        redirect_uris: ['http://foo/bar'],
+      }).then(() => {
+        assert(false);
+      }, () => {
+        const spy = DefaultProvider.Client.Schema.prototype.invalidate;
+        expect(spy).to.have.property('calledOnce', true);
+        const call = spy.getCall(0);
+        const [, code] = call.args;
+        expect(code).to.eql('implicit-force-https');
+      }).finally(() => {
+        sandbox.restore();
+      });
+    });
+    it('has an schema invalidation hook for preventing localhost', async () => {
+      const sandbox = sinon.createSandbox();
+      sandbox.spy(DefaultProvider.Client.Schema.prototype, 'invalidate');
+      await addClient({
+        grant_types: ['implicit'],
+        response_types: ['id_token'],
+        redirect_uris: ['https://localhost'],
+      }).then(() => {
+        assert(false);
+      }, () => {
+        const spy = DefaultProvider.Client.Schema.prototype.invalidate;
+        expect(spy).to.have.property('calledOnce', true);
+        const call = spy.getCall(0);
+        const [, code] = call.args;
+        expect(code).to.eql('implicit-forbid-localhost');
+      });
+    });
+  });
+
+  context('post_logout_redirect_uris', function () {
+    defaultsTo(this.title, [], undefined);
+    defaultsTo(this.title, [], { post_logout_redirect_uris: undefined });
+    mustBeArray(this.title, [{}, 'string', 123, true]);
+    rejects(this.title, [123], /must only contain strings$/);
+
+    allows(this.title, ['http://some'], {
+      application_type: 'web',
+    });
+    allows(this.title, ['https://some'], {
+      application_type: 'web',
+    });
+    rejects(this.title, ['https://rp.example.com#'], /post_logout_redirect_uris must not contain fragments$/);
+    rejects(this.title, ['https://rp.example.com#whatever'], /post_logout_redirect_uris must not contain fragments$/, {
+      application_type: 'web',
+    });
+    rejects(this.title, ['no-dot-reverse-notation:/some'], undefined, {
+      application_type: 'web',
+    });
+    rejects(this.title, ['https://localhost'], undefined, {
+      application_type: 'web',
+      grant_types: ['implicit', 'authorization_code'],
+      response_types: ['code id_token'],
+    });
+    allows(this.title, ['http://localhost'], {
+      application_type: 'web',
+    });
+    rejects(this.title, ['http://some'], undefined, {
+      application_type: 'native',
+    });
+    rejects(this.title, ['not-a-uri'], undefined, {
+      application_type: 'native',
+    });
+    rejects(this.title, ['http://foo/bar'], undefined, {
+      application_type: 'web',
+      grant_types: ['implicit'],
+      response_types: ['id_token'],
+    });
   });
 
   context('request_object_signing_alg', function () {
@@ -474,18 +551,6 @@ describe('Client metadata validation', () => {
     mustBeString(this.title);
     allows(this.title, 'public');
     rejects(this.title, 'not-a-type');
-  });
-
-  context('post_logout_redirect_uris', function () {
-    defaultsTo(this.title, [], undefined);
-    defaultsTo(this.title, [], { post_logout_redirect_uris: undefined });
-    mustBeArray(this.title, undefined);
-
-    rejects(this.title, [123], /must only contain strings$/, undefined);
-    allows(this.title, ['http://a-web-uri'], undefined);
-    allows(this.title, ['https://a-web-uri'], undefined);
-    allows(this.title, ['any-custom-scheme://not-a-web-uri'], undefined);
-    rejects(this.title, ['not a uri'], /must only contain uris$/, undefined);
   });
 
   [

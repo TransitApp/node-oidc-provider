@@ -4,7 +4,7 @@ const { promisify } = require('util');
 const path = require('path');
 const crypto = require('crypto');
 
-const render = require('koa-ejs');
+const render = require('@koa/ejs');
 const helmet = require('helmet');
 
 const { Provider } = require('../../lib'); // require('oidc-provider');
@@ -54,12 +54,13 @@ let server;
     return interactionFinished.call(provider, ...args);
   };
 
+  const directives = helmet.contentSecurityPolicy.getDefaultDirectives();
+  delete directives['form-action'];
+  directives['script-src'] = ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`];
   const pHelmet = promisify(helmet({
     contentSecurityPolicy: {
-      directives: {
-        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-        'script-src': ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
-      },
+      useDefaults: false,
+      directives,
     },
   }));
 
@@ -105,7 +106,7 @@ let server;
             break;
           }
           case 'device_authorization': {
-            if (ctx.stats === 200) {
+            if (ctx.status === 200) {
               ctx.body.verification_uri = ctx.body.verification_uri.replace('https://mtls.', 'https://');
               ctx.body.verification_uri_complete = ctx.body.verification_uri_complete.replace('https://mtls.', 'https://');
             }

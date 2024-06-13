@@ -10,7 +10,7 @@ is a good starting point to get an idea of what you should provide.
 
 ## Support
 
-If you or your business use oidc-provider, or you need help using/upgrading the module, please consider becoming a [sponsor][support-sponsor] so I can continue maintaining it and adding new features carefree. The only way to guarantee you get feedback from the author & sole maintainer of this module is to support the package through GitHub Sponsors. I make it a best effort to try and answer newcomers regardless of being a supporter or not, but if you're asking your n-th question and don't get an answer it's because I'm out of handouts and spare time to give.
+If you or your business use oidc-provider, or you need help using/upgrading the module, please consider becoming a [sponsor][support-sponsor] so I can continue maintaining it and adding new features carefree. The only way to guarantee you get feedback from the author & sole maintainer of this module is to support the package through GitHub Sponsors.
 
 <br>
 
@@ -194,8 +194,9 @@ router.post('/interaction/:uid', async (ctx, next) => {
 
 ## Custom Grant Types
 oidc-provider comes with the basic grants implemented, but you can register your own grant types,
-for example to implement an [OAuth 2.0 Token Exchange](https://tools.ietf.org/html/rfc8693). You can
-check the standard grant factories [here](/lib/actions/grants).
+for example to implement an 
+[OAuth 2.0 Token Exchange](https://www.rfc-editor.org/rfc/rfc8693.html). You can check the standard
+grant factories [here](/lib/actions/grants).
 
 ```js
 const parameters = [
@@ -299,12 +300,12 @@ connectApp.use('/oidc', oidc.callback());
 
 ### to a `fastify` application
 ```js
-// assumes fastify ^3.0.0
-await app.register(require('fastify-express'));
+// assumes fastify ^4.0.0
+const fastify = new Fastify();
+await fastify.register(require('@fastify/middie'));
 // or
-// await app.register(require('middie'));
-
-fastifyApp.use('/oidc', oidc.callback());
+// await app.register(require('@fastify/express'));
+fastify.use('/oidc', oidc.callback());
 ```
 
 ### to a `hapi` application
@@ -429,7 +430,6 @@ location / {
   - [encryption](#featuresencryption)
   - [fapi](#featuresfapi)
   - [introspection](#featuresintrospection)
-  - [issAuthResp](#featuresissauthresp)
   - [jwtIntrospection](#featuresjwtintrospection)
   - [jwtResponseModes](#featuresjwtresponsemodes)
   - [jwtUserinfo](#featuresjwtuserinfo)
@@ -560,13 +560,16 @@ async function findAccount(ctx, sub, token) {
 
 ### jwks
 
-JSON Web Key Set used by the provider for signing and decryption. The object must be in [JWK Set format](https://tools.ietf.org/html/rfc7517#section-5). All provided keys must be private keys.   
-  
-
-_**recommendation**_: Be sure to follow best practices for distributing private keying material and secrets for your respective target deployment environment. Supported key types are:
+JSON Web Key Set used by the provider for signing and decryption. The object must be in [JWK Set format](https://www.rfc-editor.org/rfc/rfc7517.html#section-5). All provided keys must be private keys.   
+ Supported key types are:   
  - RSA
  - OKP (Ed25519, Ed448, X25519, X448 sub types)
- - EC (P-256, secp256k1, P-384, and P-521 curves) Provider key rotation** - The following action order is recommended when rotating signing keys on a distributed deployment with rolling reloads in place.
+ - EC (P-256, secp256k1, P-384, and P-521 curves)   
+  
+
+_**recommendation**_: Be sure to follow best practices for distributing private keying material and secrets for your respective target deployment environment.  
+
+_**recommendation**_: The following action order is recommended when rotating signing keys on a distributed deployment with rolling reloads in place.
  1. push new keys at the very end of the "keys" array in your JWKS, this means the keys will become available for verification should they be encountered but not yet used for signing
  2. reload all your processes
  3. move your new key to the very front of the "keys" array in your JWKS, this means the key will be used for signing after reload
@@ -621,25 +624,21 @@ new Provider('http://localhost:3000', {
 
 ### features.backchannelLogout
 
-[Back-Channel Logout 1.0 - draft 06](https://openid.net/specs/openid-connect-backchannel-1_0-06.html)  
+[Back-Channel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0-final.html)  
 
-Enables Back-Channel Logout features.   
-  
-
-_**recommendation**_: Updates to draft specification versions are released as MINOR library versions, if you utilize these specification implementations consider using the tilde `~` operator in your package.json since breaking changes may be introduced as part of these version updates. Alternatively, [acknowledge](#features) the version and be notified of breaking changes as part of your CI.  
+Enables Back-Channel Logout features.  
 
 
 _**default value**_:
 ```js
 {
-  ack: undefined,
   enabled: false
 }
 ```
 
 ### features.ciba
 
-[OpenID Connect Client Initiated Backchannel Authentication Flow - Core 1.0 - draft-03](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0-03.html)  
+[OpenID Connect Client Initiated Backchannel Authentication Flow - Core 1.0](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0-final.html)  
 
 Enables Core CIBA Flow, when combined with `features.fapi` enables [Financial-grade API: Client Initiated Backchannel Authentication Profile - Implementer's Draft 01](https://openid.net/specs/openid-financial-api-ciba-ID1.html) as well.   
   
@@ -648,7 +647,6 @@ Enables Core CIBA Flow, when combined with `features.fapi` enables [Financial-gr
 _**default value**_:
 ```js
 {
-  ack: undefined,
   deliveryModes: [
     'poll'
   ],
@@ -685,7 +683,9 @@ _**default value**_:
 Helper function used to process the login_hint parameter and return the accountId value to use for processsing the request.   
   
 
-_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when login_hint is invalid. Use `return undefined` or when you can't determine the accountId from the login_hint.  
+_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when login_hint is invalid.  
+
+_**recommendation**_: Use `return undefined` or when you can't determine the accountId from the login_hint.  
 
 
 _**default value**_:
@@ -702,7 +702,11 @@ async function processLoginHint(ctx, loginHint) {
 Helper function used to process the login_hint_token parameter and return the accountId value to use for processsing the request.   
   
 
-_**recommendation**_: Use `throw Provider.errors.ExpiredLoginHintToken('validation error message')` when login_hint_token is expired. Use `throw Provider.errors.InvalidRequest('validation error message')` when login_hint_token is invalid. Use `return undefined` or when you can't determine the accountId from the login_hint.  
+_**recommendation**_: Use `throw Provider.errors.ExpiredLoginHintToken('validation error message')` when login_hint_token is expired.  
+
+_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when login_hint_token is invalid.  
+
+_**recommendation**_: Use `return undefined` or when you can't determine the accountId from the login_hint.  
 
 
 _**default value**_:
@@ -756,7 +760,9 @@ await provider.backchannelResult(...);
 Helper function used to process the binding_message parameter and throw if its not following the authorization server's policy.   
   
 
-_**recommendation**_: Use `throw Provider.errors.InvalidBindingMessage('validation error message')` when the binding_message is invalid. Use `return undefined` when a binding_message isn't required and wasn't provided.  
+_**recommendation**_: Use `throw Provider.errors.InvalidBindingMessage('validation error message')` when the binding_message is invalid.  
+
+_**recommendation**_: Use `return undefined` when a binding_message isn't required and wasn't provided.  
 
 
 _**default value**_:
@@ -775,7 +781,9 @@ async function validateBindingMessage(ctx, bindingMessage) {
 Helper function used to process the request_context parameter and throw if its not following the authorization server's policy.   
   
 
-_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when the request_context is required by policy and missing or invalid. Use `return undefined` when a request_context isn't required and wasn't provided.  
+_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when the request_context is required by policy and missing or invalid.  
+
+_**recommendation**_: Use `return undefined` when a request_context isn't required and wasn't provided.  
 
 
 _**default value**_:
@@ -792,7 +800,11 @@ async function validateRequestContext(ctx, requestContext) {
 Helper function used to verify the user_code parameter value is present when required and verify its value.   
   
 
-_**recommendation**_: Use `throw Provider.errors.MissingUserCode('validation error message')` when user_code should have been provided but wasn't. Use `throw Provider.errors.InvalidUserCode('validation error message')` when the provided user_code is invalid. Use `return undefined` when no user_code was provided and isn't required.  
+_**recommendation**_: Use `throw Provider.errors.MissingUserCode('validation error message')` when user_code should have been provided but wasn't.  
+
+_**recommendation**_: Use `throw Provider.errors.InvalidUserCode('validation error message')` when the provided user_code is invalid.  
+
+_**recommendation**_: Use `return undefined` when no user_code was provided and isn't required.  
 
 
 _**default value**_:
@@ -824,7 +836,7 @@ _**default value**_:
 
 ### features.clientCredentials
 
-[RFC6749](https://tools.ietf.org/html/rfc6749#section-1.3.4) - Client Credentials  
+[RFC6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3.4) - Client Credentials  
 
 Enables `grant_type=client_credentials` to be used on the token endpoint.  
 
@@ -870,7 +882,7 @@ _**default value**_:
 
 ### features.deviceFlow
 
-[RFC8628](https://tools.ietf.org/html/rfc8628) - OAuth 2.0 Device Authorization Grant (Device Flow)  
+[RFC8628](https://www.rfc-editor.org/rfc/rfc8628.html) - OAuth 2.0 Device Authorization Grant (Device Flow)  
 
 Enables Device Authorization Grant  
 
@@ -1110,7 +1122,7 @@ _**default value**_:
 
 ### features.introspection
 
-[RFC7662](https://tools.ietf.org/html/rfc7662) - OAuth 2.0 Token Introspection  
+[RFC7662](https://www.rfc-editor.org/rfc/rfc7662.html) - OAuth 2.0 Token Introspection  
 
 Enables Token Introspection for:
  - opaque access tokens
@@ -1146,24 +1158,6 @@ async function introspectionAllowedPolicy(ctx, client, token) {
 
 </details>
 
-### features.issAuthResp
-
-[draft-ietf-oauth-iss-auth-resp-01](https://tools.ietf.org/html/draft-ietf-oauth-iss-auth-resp-01) - OAuth 2.0 Authorization Server Issuer Identifier in Authorization Response  
-
-Enables `iss` authorization response parameter for responses without existing countermeasures against mix-up attacks.   
-  
-
-_**recommendation**_: Updates to draft specification versions are released as MINOR library versions, if you utilize these specification implementations consider using the tilde `~` operator in your package.json since breaking changes may be introduced as part of these version updates. Alternatively, [acknowledge](#features) the version and be notified of breaking changes as part of your CI.  
-
-
-_**default value**_:
-```js
-{
-  ack: undefined,
-  enabled: false
-}
-```
-
 ### features.jwtIntrospection
 
 [draft-ietf-oauth-jwt-introspection-response-10](https://tools.ietf.org/html/draft-ietf-oauth-jwt-introspection-response-10) - JWT Response for OAuth Token Introspection  
@@ -1184,18 +1178,14 @@ _**default value**_:
 
 ### features.jwtResponseModes
 
-[openid-financial-api-jarm-ID1](https://openid.net/specs/openid-financial-api-jarm-ID1.html) - JWT Secured Authorization Response Mode (JARM)  
+[JWT Secured Authorization Response Mode (JARM)](https://openid.net/specs/oauth-v2-jarm.html)  
 
-Enables JWT Secured Authorization Responses   
-  
-
-_**recommendation**_: Updates to draft specification versions are released as MINOR library versions, if you utilize these specification implementations consider using the tilde `~` operator in your package.json since breaking changes may be introduced as part of these version updates. Alternatively, [acknowledge](#features) the version and be notified of breaking changes as part of your CI.  
+Enables JWT Secured Authorization Responses  
 
 
 _**default value**_:
 ```js
 {
-  ack: undefined,
   enabled: false
 }
 ```
@@ -1216,7 +1206,7 @@ _**default value**_:
 
 ### features.mTLS
 
-[RFC8705](https://tools.ietf.org/html/rfc8705) - OAuth 2.0 Mutual TLS Client Authentication and Certificate Bound Access Tokens (MTLS)  
+[RFC8705](https://www.rfc-editor.org/rfc/rfc8705.html) - OAuth 2.0 Mutual TLS Client Authentication and Certificate Bound Access Tokens (MTLS)  
 
 Enables specific features from the Mutual TLS specification. The three main features have their own specific setting in this feature's configuration object and you must provide functions for resolving some of the functions which are deployment-specific.   
   
@@ -1352,18 +1342,14 @@ false
 
 ### features.pushedAuthorizationRequests
 
-[draft-ietf-oauth-par-08](https://tools.ietf.org/html/draft-ietf-oauth-par-08) - OAuth 2.0 Pushed Authorization Requests (PAR)  
+[RFC9126](https://www.rfc-editor.org/rfc/rfc9126.html) - OAuth 2.0 Pushed Authorization Requests (PAR)  
 
-Enables the use of `pushed_authorization_request_endpoint` defined by the Pushed Authorization Requests draft.   
-  
-
-_**recommendation**_: Updates to draft specification versions are released as MINOR library versions, if you utilize these specification implementations consider using the tilde `~` operator in your package.json since breaking changes may be introduced as part of these version updates. Alternatively, [acknowledge](#features) the version and be notified of breaking changes as part of your CI.  
+Enables the use of `pushed_authorization_request_endpoint` defined by the Pushed Authorization Requests RFC.  
 
 
 _**default value**_:
 ```js
 {
-  ack: undefined,
   enabled: false,
   requirePushedAuthorizationRequests: false
 }
@@ -1441,8 +1427,8 @@ new (provider.InitialAccessToken)({}).save().then(console.log);
 #### issueRegistrationAccessToken
 
 Boolean or a function used to decide whether a registration access token will be issued or not. Supported values are
- - `false` registration access tokens is issued
- - `true` registration access tokens is not issued
+ - `true` registration access tokens is issued
+ - `false` registration access tokens is not issued
  - function returning true/false, true when token should be issued, false when it shouldn't   
   
 
@@ -1467,7 +1453,9 @@ async issueRegistrationAccessToken(ctx) {
 define registration and registration management policies applied to client properties. Policies are sync/async functions that are assigned to an Initial Access Token that run before the regular client property validations are run. Multiple policies may be assigned to an Initial Access Token and by default the same policies will transfer over to the Registration Access Token. A policy may throw / reject and it may modify the properties object.   
   
 
-_**recommendation**_: referenced policies must always be present when encountered on a token, an AssertionError will be thrown inside the request context if it is not, resulting in a 500 Server Error. the same policies will be assigned to the Registration Access Token after a successful validation. If you wish to assign different policies to the Registration Access Token
+_**recommendation**_: referenced policies must always be present when encountered on a token, an AssertionError will be thrown inside the request context if it is not, resulting in a 500 Server Error.  
+
+_**recommendation**_: the same policies will be assigned to the Registration Access Token after a successful validation. If you wish to assign different policies to the Registration Access Token
  ```js
  // inside your final ran policy
  ctx.oidc.entities.RegistrationAccessToken.policies = ['update-policy'];
@@ -1533,7 +1521,7 @@ async function secretFactory(ctx) {
 
 ### features.registrationManagement
 
-[OAuth 2.0 Dynamic Client Registration Management Protocol](https://tools.ietf.org/html/rfc7592)  
+[OAuth 2.0 Dynamic Client Registration Management Protocol](https://www.rfc-editor.org/rfc/rfc7592.html)  
 
 Enables Update and Delete features described in the RFC  
 
@@ -1584,7 +1572,7 @@ false
 
 ### features.requestObjects
 
-[Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#RequestObject) and [JWT Secured Authorization Request (JAR)](https://tools.ietf.org/html/draft-ietf-oauth-jwsreq-33) - Request Object  
+[Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#RequestObject) and [JWT Secured Authorization Request (JAR)](https://www.rfc-editor.org/rfc/rfc9101.html) - Request Object  
 
 Enables the use and validations of the `request` and/or `request_uri` parameters.  
 
@@ -1661,7 +1649,7 @@ true
 
 ### features.resourceIndicators
 
-[RFC8707](https://tools.ietf.org/html/rfc8707) - Resource Indicators for OAuth 2.0  
+[RFC8707](https://www.rfc-editor.org/rfc/rfc8707.html) - Resource Indicators for OAuth 2.0  
 
 Enables the use of `resource` parameter for the authorization and token endpoints to enable issuing Access Tokens for Resource Servers (APIs).   
  - Multiple resource parameters may be present during Authorization Code Flow, Device Authorization Grant, and Backchannel Authentication Requests, but only a single audience for an Access Token is permitted.
@@ -1724,11 +1712,8 @@ async function getResourceServerInfo(ctx, resourceIndicator, client) {
   throw new errors.InvalidTarget();
 }
 ```
-<a id="get-resource-server-info-resource-server-api-with-two-scopes-an-expected-audience-value-an-access-token-ttl"></a><details><summary>(Click to expand) Resource Server (API) with two scopes, an expected audience value, an Access Token TTL</summary><br>
-
-
-and a JWT Access Token Format.
-  
+<a id="get-resource-server-info-resource-server-api-with-two-scopes-an-expected-audience-value-an-access-token-ttl-and-a-jwt-access-token-format"></a><details><summary>(Click to expand) Resource Server (API) with two scopes, an expected audience value, an Access Token TTL and a JWT Access Token Format.
+</summary><br>
 
 ```js
 {
@@ -1818,8 +1803,9 @@ and a JWT Access Token Format.
     }
   }
   // PASETO Access Token Format (when accessTokenFormat is 'paseto')
+  // Note: v2.local and v4.local are NOT supported
   paseto?: {
-    version: 1 | 2,
+    version: 1 | 2 | 3 | 4,
     purpose: 'local' | 'public',
     key?: crypto.KeyObject, // required when purpose is 'local'
     kid?: string, // OPTIONAL `kid` to aid in signing key selection or to put in the footer for 'local'
@@ -1833,7 +1819,9 @@ and a JWT Access Token Format.
 Function used to determine if an already granted resource indicator should be used without being explicitly requested by the client during the Token Endpoint request.   
   
 
-_**recommendation**_: Use `return true` when it's allowed for a client skip providing the "resource" parameter at the Token Endpoint. Use `return false` (default) when it's required for a client to explitly provide a "resource" parameter at the Token Endpoint or when other indication dictates an Access Token for the UserInfo Endpoint should returned.  
+_**recommendation**_: Use `return true` when it's allowed for a client skip providing the "resource" parameter at the Token Endpoint.  
+
+_**recommendation**_: Use `return false` (default) when it's required for a client to explitly provide a "resource" parameter at the Token Endpoint or when other indication dictates an Access Token for the UserInfo Endpoint should returned.  
 
 
 _**default value**_:
@@ -1850,7 +1838,7 @@ async function useGrantedResource(ctx, model) {
 
 ### features.revocation
 
-[RFC7009](https://tools.ietf.org/html/rfc7009) - OAuth 2.0 Token Revocation  
+[RFC7009](https://www.rfc-editor.org/rfc/rfc7009.html) - OAuth 2.0 Token Revocation  
 
 Enables Token Revocation for:
  - opaque access tokens
@@ -1867,7 +1855,7 @@ _**default value**_:
 
 ### features.rpInitiatedLogout
 
-[RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0-01.html)  
+[RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0-final.html)  
 
 Enables RP-Initiated Logout features  
 
@@ -2325,7 +2313,7 @@ _**default value**_:
 }
 ```
 </details>
-<a id="formats-customizers-to-push-a-payload-and-a-footer-to-a-paseto-structured-access-token"></a><details><summary>(Click to expand) To push a payload and a footer to a PASETO structured access token
+<a id="formats-customizers-to-push-a-payload-a-footer-and-use-an-implicit-assertion-with-a-paseto-structured-access-token"></a><details><summary>(Click to expand) To push a payload, a footer, and use an implicit assertion with a PASETO structured access token
 </summary><br>
 
 ```js
@@ -2334,6 +2322,7 @@ _**default value**_:
     paseto(ctx, token, structuredToken) {
       structuredToken.payload.foo = 'bar';
       structuredToken.footer = { foo: 'bar' };
+      structuredToken.assertion = 'foo'; // v3 and v4 tokens only
     }
   }
 }
@@ -2715,7 +2704,7 @@ async function pairwiseIdentifier(ctx, accountId, client) {
 
 ### pkce
 
-[RFC7636 - Proof Key for Code Exchange (PKCE)](https://tools.ietf.org/html/rfc7636)  
+[RFC7636 - Proof Key for Code Exchange (PKCE)](https://www.rfc-editor.org/rfc/rfc7636.html)  
 
 PKCE configuration such as available methods and policy check on required use of PKCE  
 
@@ -2949,7 +2938,9 @@ _**default value**_:
 description: Expirations for various token and session types. The value can be a number (in seconds) or a synchronous function that dynamically returns value based on the context.   
   
 
-_**recommendation**_: Do not set token TTLs longer then they absolutely have to be, the shorter the TTL, the better. Rather than setting crazy high Refresh Token TTL look into `rotateRefreshToken` configuration option which is set up in way that when refresh tokens are regularly used they will have their TTL refreshed (via rotation). This is inline with the [OAuth 2.0 Security Best Current Practice](https://tools.ietf.org/html/draft-ietf-oauth-security-topics-13)  
+_**recommendation**_: Do not set token TTLs longer then they absolutely have to be, the shorter the TTL, the better.  
+
+_**recommendation**_: Rather than setting crazy high Refresh Token TTL look into `rotateRefreshToken` configuration option which is set up in way that when refresh tokens are regularly used they will have their TTL refreshed (via rotation). This is inline with the [OAuth 2.0 Security Best Current Practice](https://tools.ietf.org/html/draft-ietf-oauth-security-topics-13)  
 
 
 _**default value**_:
@@ -3019,7 +3010,7 @@ Configure `ttl` for a given token type with a function like so, this must return
 
 Fine-tune the algorithms your provider will support by declaring algorithm values for each respective JWA use  
 
-_**recommendation**_: Only allow JWA algs that are necessary. The current defaults are based on recommendations from the [JWA specification](https://tools.ietf.org/html/rfc7518) + enables RSASSA-PSS based on current guidance in FAPI. "none" JWT algs are disabled by default but available if you need them.  
+_**recommendation**_: Only allow JWA algs that are necessary. The current defaults are based on recommendations from the [JWA specification](https://www.rfc-editor.org/rfc/rfc7518.html) + enables RSASSA-PSS based on current guidance in FAPI. "none" JWT algs are disabled by default but available if you need them.  
 
 
 ### enabledJWA.authorizationEncryptionAlgValues
@@ -3564,8 +3555,8 @@ be additionally formencoded.
 
 A proper way of submitting `client_id` and `client_secret` using `client_secret_basic` is
 `Authorization: base64(formEncode(client_id):formEncode(client_secret))` as per
-https://tools.ietf.org/html/rfc6749#section-2.3.1 incl.
-https://tools.ietf.org/html/rfc6749#appendix-B
+https://www.rfc-editor.org/rfc/rfc6749.html#section-2.3.1 incl.
+https://www.rfc-editor.org/rfc/rfc6749.html#appendix-B
 
 Example:
 

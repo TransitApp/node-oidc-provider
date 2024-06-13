@@ -2,7 +2,6 @@ const crypto = require('crypto');
 
 const pkg = require('../../package.json');
 const enabledJWA = JSON.parse(JSON.stringify(require('../../lib/consts/jwa')));
-const { InvalidClientMetadata } = require('../../lib/helpers/errors');
 
 function filterOutNone(conf, prop) {
   // eslint-disable-next-line no-param-reassign
@@ -22,16 +21,6 @@ const tokenEndpointAuthMethods = [
 ];
 
 module.exports = {
-  clients: [
-    {
-      client_id: 'dpop-heroku',
-      token_endpoint_auth_method: 'none',
-      scope: 'openid offline_access',
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      redirect_uris: ['https://murmuring-journey-60982.herokuapp.com/cb'],
-    },
-  ],
   interactions: {
     url(ctx, interaction) {
       return `/interaction/${interaction.uid}`;
@@ -56,13 +45,6 @@ module.exports = {
     profile: ['birthdate', 'family_name', 'gender', 'given_name', 'locale', 'middle_name', 'name',
       'nickname', 'picture', 'preferred_username', 'profile', 'updated_at', 'website', 'zoneinfo'],
   },
-  clientBasedCORS(ctx, origin, client) {
-    if (client.clientId === 'dpop-heroku' && origin === 'https://murmuring-journey-60982.herokuapp.com') {
-      return true;
-    }
-
-    return false;
-  },
   features: {
     backchannelLogout: { enabled: true },
     devInteractions: { enabled: false },
@@ -71,16 +53,7 @@ module.exports = {
       certificateBoundAccessTokens: true,
       selfSignedTlsClientAuth: true,
       getCertificate(ctx) {
-        return unescape(ctx.get('x-ssl-client-cert').replace(/\+/g, ' '));
-      },
-      certificateAuthorized(ctx) {
-        return ctx.get('x-ssl-client-verify') === 'SUCCESS';
-      },
-      certificateSubjectMatches(ctx, property, expected) {
-        if (property !== 'tls_client_auth_subject_dn') {
-          throw new InvalidClientMetadata(`${property} is not supported by this deployment`);
-        }
-        return ctx.get('x-ssl-client-s-dn') === expected;
+        return ctx.get('client-certificate');
       },
     },
     claimsParameter: { enabled: true },

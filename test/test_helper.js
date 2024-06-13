@@ -1,3 +1,4 @@
+/* eslint-disable global-require */
 /* eslint-disable no-underscore-dangle */
 
 process.env.NODE_ENV = process.env.NODE_ENV || 'test';
@@ -16,8 +17,6 @@ const base64url = require('base64url');
 const KeyGrip = require('keygrip'); // eslint-disable-line import/no-extraneous-dependencies
 const Connect = require('connect');
 const Express = require('express');
-const Fastify = require('fastify');
-const middie = require('middie');
 const Koa = require('koa');
 
 const nanoid = require('../lib/helpers/nanoid');
@@ -222,6 +221,13 @@ module.exports = function testHelper(dir, {
           },
         });
 
+        Object.defineProperty(this, 'validateIss', {
+          value: (response) => {
+            const { query: { iss } } = parse(response.headers.location, true);
+            expect(iss).to.equal(issuerIdentifier);
+          },
+        });
+
         Object.defineProperty(this, 'validateInteractionRedirect', {
           value: (response) => {
             const { hostname, search, query } = parse(response.headers.location);
@@ -273,6 +279,9 @@ module.exports = function testHelper(dir, {
       } else {
         absolute = all;
       }
+
+      // eslint-disable-next-line no-param-reassign
+      keys = (!absolute || keys.includes('id_token') || keys.includes('response')) ? keys : [...new Set(keys.concat('iss'))];
 
       return (response) => {
         const { query } = parse(response.headers.location, true);
@@ -448,21 +457,23 @@ module.exports = function testHelper(dir, {
         break;
       }
       case 'fastify': {
+        const Fastify = require('fastify');
+        const middie = require('@fastify/middie');
         const app = new Fastify();
         await app.register(middie);
         app.use(mountTo, provider.callback());
         await new Promise((resolve) => global.server.close(resolve));
-        await app.listen(port);
+        await app.listen(port, '::');
         global.server = app.server;
         afterPromises.push(async () => {
           await app.close();
-          global.server = createServer().listen(port);
+          global.server = createServer().listen(port, '::');
           await new Promise((resolve) => global.server.once('listening', resolve));
         });
         break;
       }
       case 'hapi': {
-        const Hapi = require('@hapi/hapi'); // eslint-disable-line global-require
+        const Hapi = require('@hapi/hapi');
         const app = new Hapi.Server({ port });
         const callback = provider.callback();
         app.route({
@@ -489,7 +500,7 @@ module.exports = function testHelper(dir, {
         global.server = app.listener;
         afterPromises.push(async () => {
           await app.stop();
-          global.server = createServer().listen(port);
+          global.server = createServer().listen(port, '::');
           await new Promise((resolve) => global.server.once('listening', resolve));
         });
         break;
