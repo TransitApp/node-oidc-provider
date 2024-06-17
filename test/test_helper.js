@@ -1,31 +1,75 @@
-/* eslint-disable global-require */
 /* eslint-disable no-underscore-dangle */
+
+import { parse, pathToFileURL } from 'node:url';
+import * as path from 'node:path';
+import * as querystring from 'node:querystring';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
+
+import sinon from 'sinon';
+import { dirname } from 'desm';
+import flatten from 'lodash/flatten.js';
+import { Request } from 'superagent'; // eslint-disable-line import/no-extraneous-dependencies
+import { agent as supertest } from 'supertest';
+import { expect } from 'chai';
+import koaMount from 'koa-mount';
+import base64url from 'base64url';
+import KeyGrip from 'keygrip'; // eslint-disable-line import/no-extraneous-dependencies
+import { CookieAccessInfo } from 'cookiejar'; // eslint-disable-line import/no-extraneous-dependencies
+import Connect from 'connect';
+import Express from 'express';
+import Koa from 'koa';
+
+import nanoid from '../lib/helpers/nanoid.js';
+import epochTime from '../lib/helpers/epoch_time.js';
+import Provider from '../lib/index.js';
+import instance from '../lib/helpers/weak_cache.js';
+
+import { Account, TestAdapter } from './models.js';
+import keys from './keys.js';
+
+const { _auth } = Request.prototype;
+
+function encodeToken(token) {
+  return encodeURIComponent(token).replace(/(?:[-_.!~*'()]|%20)/g, (substring) => {
+    switch (substring) {
+      case '-':
+        return '%2D';
+      case '_':
+        return '%5F';
+      case '.':
+        return '%2E';
+      case '!':
+        return '%21';
+      case '~':
+        return '%7E';
+      case '*':
+        return '%2A';
+      case "'":
+        return '%27';
+      case '(':
+        return '%28';
+      case ')':
+        return '%29';
+      case '%20':
+        return '+';
+      default:
+        throw new Error();
+    }
+  });
+}
+
+Request.prototype._auth = function (user, pass, options, encoder) {
+  if (options?.type === 'basic') {
+    return _auth.call(this, encodeToken(user), encodeToken(pass), options, encoder);
+  }
+
+  return _auth.call(this, user, pass, options, encoder);
+};
 
 process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 
-const { parse } = require('url');
-const path = require('path');
-const querystring = require('querystring');
-const { createServer } = require('http');
-
-const sinon = require('sinon');
-const flatten = require('lodash/flatten');
-const { agent: supertest } = require('supertest');
-const { expect } = require('chai');
-const koaMount = require('koa-mount');
-const base64url = require('base64url');
-const KeyGrip = require('keygrip'); // eslint-disable-line import/no-extraneous-dependencies
-const Connect = require('connect');
-const Express = require('express');
-const Koa = require('koa');
-
-const nanoid = require('../lib/helpers/nanoid');
-const epochTime = require('../lib/helpers/epoch_time');
-const { Provider } = require('../lib');
-
-const { Account, TestAdapter } = require('./models');
-
-global.i = require('../lib/helpers/weak_cache');
+global.i = instance;
 
 Object.defineProperties(Provider.prototype, {
   enable: {
@@ -60,12 +104,15 @@ const { port } = global.server.address();
 
 const jwt = (token) => JSON.parse(base64url.decode(token.split('.')[1])).jti;
 
-module.exports = function testHelper(dir, {
-  config: base = path.basename(dir),
+export default function testHelper(importMetaUrl, {
+  config: base,
   protocol = 'http:',
   mountVia = process.env.MOUNT_VIA,
   mountTo = mountVia ? process.env.MOUNT_TO || '/' : '/',
 } = {}) {
+  const dir = dirname(importMetaUrl);
+  // eslint-disable-next-line no-param-reassign
+  base ??= path.basename(dir);
   const afterPromises = [];
 
   after(async () => {
@@ -75,8 +122,10 @@ module.exports = function testHelper(dir, {
   });
 
   return async function () {
-    const conf = path.format({ dir, base: `${base}.config.js` });
-    let { config, client, clients } = require(conf); // eslint-disable-line
+    const conf = pathToFileURL(path.format({ dir, base: `${base}.config.js` })).toString();
+    const { default: mod } = await import(conf);
+    const { config, client } = mod;
+    let { clients } = mod;
 
     if (client && !clients) {
       clients = [client];
@@ -90,7 +139,7 @@ module.exports = function testHelper(dir, {
 
     const provider = new Provider(issuerIdentifier, {
       clients,
-      jwks: global.keystore.toJWKS(true),
+      jwks: { keys },
       adapter: TestAdapter,
       ...config,
     });
@@ -107,7 +156,10 @@ module.exports = function testHelper(dir, {
         `_session.legacy.sig=; path=/; expires=${expire.toGMTString()}; httponly`,
       ];
 
-      return agent._saveCookies.bind(agent)({ headers: { 'set-cookie': cookies } });
+      return agent._saveCookies.bind(agent)({
+        request: { url: provider.issuer },
+        headers: { 'set-cookie': cookies },
+      });
     }
 
     async function login({
@@ -124,14 +176,14 @@ module.exports = function testHelper(dir, {
       expire.setDate(expire.getDate() + 1);
       this.loggedInAccountId = accountId;
 
-      const keys = new KeyGrip(i(provider).configuration('cookies.keys'));
+      const keyGrip = new KeyGrip(i(provider).configuration('cookies.keys'));
       const session = new (provider.Session)({ jti: sessionId, loginTs, accountId });
       lastSession = session;
       const sessionCookie = `_session=${sessionId}; path=/; expires=${expire.toGMTString()}; httponly`;
       const cookies = [sessionCookie];
 
       const [pre, ...post] = sessionCookie.split(';');
-      cookies.push([`_session.sig=${keys.sign(pre)}`, ...post].join(';'));
+      cookies.push([`_session.sig=${keyGrip.sign(pre)}`, ...post].join(';'));
 
       session.authorizations = {};
       const ctx = new provider.OIDCContext({ req: { socket: {} }, res: {} });
@@ -141,7 +193,6 @@ module.exports = function testHelper(dir, {
         ctx.params.claims = JSON.stringify(ctx.params.claims);
       }
 
-      // eslint-disable-next-line no-restricted-syntax
       for (const cl of clients) {
         const grant = new provider.Grant({ clientId: cl.client_id, accountId });
         grant.addOIDCScope(scope);
@@ -155,7 +206,7 @@ module.exports = function testHelper(dir, {
         if (rejectedClaims.length) {
           grant.rejectOIDCClaims(rejectedClaims);
         }
-        // eslint-disable-next-line no-restricted-syntax
+
         for (const [key, value] of Object.entries(resources)) {
           grant.addResourceScope(key, value);
         }
@@ -174,14 +225,17 @@ module.exports = function testHelper(dir, {
       }
 
       return Account.findAccount({}, accountId).then(session.save(ttl)).then(() => {
-        agent._saveCookies.bind(agent)({ headers: { 'set-cookie': cookies } });
+        agent._saveCookies.bind(agent)({
+          request: { url: provider.issuer },
+          headers: { 'set-cookie': cookies },
+        });
       });
     }
 
     class AuthorizationRequest {
       constructor(parameters = {}) {
         if (parameters.claims && typeof parameters.claims !== 'string') {
-          parameters.claims = JSON.stringify(parameters.claims); // eslint-disable-line no-param-reassign, max-len
+          parameters.claims = JSON.stringify(parameters.claims); // eslint-disable-line no-param-reassign
         }
 
         Object.assign(this, parameters);
@@ -257,7 +311,7 @@ module.exports = function testHelper(dir, {
       }
     }
 
-    AuthorizationRequest.prototype.validateInteraction = (eName, ...eReasons) => { // eslint-disable-line arrow-body-style, max-len
+    AuthorizationRequest.prototype.validateInteraction = (eName, ...eReasons) => { // eslint-disable-line arrow-body-style
       return (response) => {
         const uid = readCookie(response.headers['set-cookie'][0]);
         const { prompt: { name, reasons } } = TestAdapter.for('Interaction').syncFind(uid);
@@ -272,7 +326,7 @@ module.exports = function testHelper(dir, {
       response.headers.location = response.headers.location.replace('#', '?'); // eslint-disable-line no-param-reassign
     };
 
-    AuthorizationRequest.prototype.validatePresence = function (keys, all) {
+    AuthorizationRequest.prototype.validatePresence = function (properties, all) {
       let absolute;
       if (all === undefined) {
         absolute = true;
@@ -281,16 +335,16 @@ module.exports = function testHelper(dir, {
       }
 
       // eslint-disable-next-line no-param-reassign
-      keys = (!absolute || keys.includes('id_token') || keys.includes('response')) ? keys : [...new Set(keys.concat('iss'))];
+      properties = (!absolute || properties.includes('id_token') || properties.includes('response')) ? properties : [...new Set(properties.concat('iss'))];
 
       return (response) => {
         const { query } = parse(response.headers.location, true);
         if (absolute) {
-          expect(query).to.have.keys(keys);
+          expect(query).to.have.keys(properties);
         } else {
-          expect(query).to.contain.keys(keys);
+          expect(query).to.contain.keys(properties);
         }
-        keys.forEach((key) => {
+        properties.forEach((key) => {
           this.res[key] = query[key];
         });
       };
@@ -323,8 +377,13 @@ module.exports = function testHelper(dir, {
       return lastSession;
     }
 
+    function getSessionId() {
+      const { value: sessionId } = agent.jar.getCookie('_session', CookieAccessInfo.All) || {};
+      return sessionId;
+    }
+
     function getSession({ instantiate } = { instantiate: false }) {
-      const { value: sessionId } = agent.jar.getCookie('_session', { path: '/' });
+      const sessionId = getSessionId();
       const raw = TestAdapter.for('Session').syncFind(sessionId);
 
       if (instantiate) {
@@ -332,11 +391,6 @@ module.exports = function testHelper(dir, {
       }
 
       return raw;
-    }
-
-    function getSessionId() {
-      const { value: sessionId } = agent.jar.getCookie('_session', { path: '/' }) || {};
-      return sessionId;
     }
 
     function getGrantId(client_id) {
@@ -457,23 +511,23 @@ module.exports = function testHelper(dir, {
         break;
       }
       case 'fastify': {
-        const Fastify = require('fastify');
-        const middie = require('@fastify/middie');
+        const { default: Fastify } = await import('fastify');
+        const { default: middie } = await import('@fastify/middie');
         const app = new Fastify();
         await app.register(middie);
         app.use(mountTo, provider.callback());
-        await new Promise((resolve) => global.server.close(resolve));
-        await app.listen(port, '::');
+        await new Promise((resolve) => { global.server.close(resolve); });
+        await app.listen({ port, host: '::' });
         global.server = app.server;
         afterPromises.push(async () => {
           await app.close();
           global.server = createServer().listen(port, '::');
-          await new Promise((resolve) => global.server.once('listening', resolve));
+          await once(global.server, 'listening');
         });
         break;
       }
       case 'hapi': {
-        const Hapi = require('@hapi/hapi');
+        const { default: Hapi } = await import('@hapi/hapi');
         const app = new Hapi.Server({ port });
         const callback = provider.callback();
         app.route({
@@ -484,10 +538,8 @@ module.exports = function testHelper(dir, {
             req.originalUrl = req.url;
             req.url = req.url.replace(mountTo, '');
 
-            await new Promise((resolve) => {
-              res.on('finish', resolve);
-              callback(req, res);
-            });
+            callback(req, res);
+            await once(res, 'finish');
 
             req.url = req.url.replace('/', mountTo);
             delete req.originalUrl;
@@ -495,13 +547,13 @@ module.exports = function testHelper(dir, {
             return res.finished ? h.abandon : h.continue;
           },
         });
-        await new Promise((resolve) => global.server.close(resolve));
+        await new Promise((resolve) => { global.server.close(resolve); });
         await app.start();
         global.server = app.listener;
         afterPromises.push(async () => {
           await app.stop();
           global.server = createServer().listen(port, '::');
-          await new Promise((resolve) => global.server.once('listening', resolve));
+          await once(global.server, 'listening');
         });
         break;
       }
@@ -533,9 +585,9 @@ module.exports = function testHelper(dir, {
 
     this.agent = agent;
   };
-};
+}
 
-module.exports.passInteractionChecks = (...reasons) => {
+export function passInteractionChecks(...reasons) {
   const cb = reasons.pop();
 
   const sandbox = sinon.createSandbox();
@@ -557,9 +609,9 @@ module.exports.passInteractionChecks = (...reasons) => {
 
     cb();
   });
-};
+}
 
-module.exports.skipConsent = () => {
+export function skipConsent() {
   const sandbox = sinon.createSandbox();
 
   before(function () {
@@ -567,4 +619,4 @@ module.exports.skipConsent = () => {
   });
 
   after(sandbox.restore);
-};
+}

@@ -1,5 +1,5 @@
-/* eslint-disable no-restricted-syntax, max-len, no-await-in-loop, no-plusplus */
-const { spawn } = require('child_process');
+/* eslint-disable no-await-in-loop */
+import { spawn } from 'node:child_process';
 
 function pass({ mountTo, mountVia } = {}) {
   const child = spawn(
@@ -28,27 +28,17 @@ function pass({ mountTo, mountVia } = {}) {
   });
 }
 
-(async () => {
+try {
   await pass();
 
   if (process.platform === 'linux' || !('CI' in process.env)) {
     const mountTo = '/oidc';
-    const frameworks = ['connect', 'express', 'koa'];
-
-    const [major] = process.version.slice(1).split('.').map((x) => parseInt(x, 10));
-
-    if (major >= 12) {
-      frameworks.push('hapi');
-    }
-
-    if (major >= 14) {
-      frameworks.push('fastify');
-    }
+    const frameworks = ['connect', 'express', 'koa', 'hapi', 'fastify'];
 
     for (const mountVia of frameworks) {
       await pass({ mountVia, mountTo });
     }
   }
-})().catch(() => {
+} catch {
   process.exitCode = 1;
-});
+}

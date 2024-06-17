@@ -1,29 +1,31 @@
 /* eslint-disable no-console */
 
-const { readFileSync } = require('fs');
-const path = require('path');
-const { randomBytes, randomUUID } = require('crypto');
-const https = require('https');
-const { promisify } = require('util');
-const { URL } = require('url');
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
+import * as https from 'node:https';
+import { promisify } from 'node:util';
+import { URL } from 'node:url';
 
-const jose = require('jose2');
-const helmet = require('helmet');
-const selfsigned = require('selfsigned').generate();
+import { dirname } from 'desm';
+import helmet from 'helmet';
+import { generate } from 'selfsigned';
 
-const { Provider, errors } = require('../../lib'); // require('oidc-provider');
-const MemoryAdapter = require('../../lib/adapters/memory_adapter');
+import Provider, { errors } from '../../lib/index.js'; // from 'oidc-provider';
+import MemoryAdapter from '../../lib/adapters/memory_adapter.js';
+import { stripPrivateJWKFields } from '../../test/keys.js';
 
-const OFFICIAL_CERTIFICATION = 'https://www.certification.openid.net';
-const { PORT = 3000, ISSUER = `http://localhost:${PORT}`, SUITE_BASE_URL = OFFICIAL_CERTIFICATION } = process.env;
+const __dirname = dirname(import.meta.url);
+const selfsigned = generate();
+const { PORT = 3000, ISSUER = `http://localhost:${PORT}` } = process.env;
 
 const ALGS = ['PS256'];
-const tokenEndpointAuthMethods = ['private_key_jwt', 'self_signed_tls_client_auth'];
+const clientAuthMethods = ['private_key_jwt', 'self_signed_tls_client_auth'];
 
-const normalize = (cert) => cert.toString().replace(/(?:-----(?:BEGIN|END) CERTIFICATE-----|\s)/g, '');
-
-const JWK_ONE = jose.JWK.asKey(readFileSync(path.join(__dirname, 'one.key')), { x5c: [normalize(readFileSync(path.join(__dirname, 'one.crt')))], alg: 'PS256', use: 'sig' }).toJWK();
-const JWK_TWO = jose.JWK.asKey(readFileSync(path.join(__dirname, 'two.key')), { x5c: [normalize(readFileSync(path.join(__dirname, 'two.crt')))], alg: 'PS256', use: 'sig' }).toJWK();
+const {
+  client: { jwks: { keys: [JWK_ONE] } },
+  client2: { jwks: { keys: [JWK_TWO] } },
+} = JSON.parse(readFileSync(path.join(__dirname, 'plan.json')));
 
 function jwk(metadata, key) {
   return {
@@ -78,7 +80,7 @@ const adapter = (name) => {
       const [version, ...rest] = id.split('-');
 
       let metadata = {
-        cacheBuster: randomUUID(),
+        cacheBuster: crypto.randomUUID(),
       };
 
       if (version === '1.0') {
@@ -102,10 +104,10 @@ const adapter = (name) => {
         let key;
         switch (num) {
           case 'one':
-            key = JWK_ONE;
+            key = stripPrivateJWKFields(JWK_ONE);
             break;
           case 'two':
-            key = JWK_TWO;
+            key = stripPrivateJWKFields(JWK_TWO);
             break;
           default:
             return orig.call(this, id);
@@ -164,7 +166,6 @@ const fapi = new Provider(ISSUER, {
     id_token_signed_response_alg: 'PS256',
     request_object_signing_alg: 'PS256',
   },
-  clockTolerance: 5,
   features: {
     ciba: {
       enabled: true,
@@ -196,15 +197,15 @@ const fapi = new Provider(ISSUER, {
       certificateBoundAccessTokens: true,
       selfSignedTlsClientAuth: true,
       getCertificate(ctx) {
-        if (SUITE_BASE_URL === OFFICIAL_CERTIFICATION) {
-          return ctx.get('client-certificate');
+        if (process.env.NODE_ENV === 'production') {
+          try {
+            return new crypto.X509Certificate(Buffer.from(ctx.get('client-certificate'), 'base64'));
+          } catch {
+            return undefined;
+          }
         }
 
-        const peerCertificate = ctx.socket.getPeerCertificate();
-        if (peerCertificate.raw) {
-          return `-----BEGIN CERTIFICATE-----\n${peerCertificate.raw.toString('base64').match(/.{1,64}/g).join('\n')}\n-----END CERTIFICATE-----`;
-        }
-        return undefined;
+        return ctx.socket.getPeerX509Certificate();
       },
     },
     jwtResponseModes: { enabled: true },
@@ -217,12 +218,12 @@ const fapi = new Provider(ISSUER, {
     },
   },
   responseTypes: ['code id_token', 'code'],
-  tokenEndpointAuthMethods,
+  clientAuthMethods,
   enabledJWA: {
     authorizationSigningAlgValues: ALGS,
     idTokenSigningAlgValues: ALGS,
     requestObjectSigningAlgValues: ALGS,
-    tokenEndpointAuthSigningAlgValues: ALGS,
+    clientAuthSigningAlgValues: ALGS,
     userinfoSigningAlgValues: ALGS,
   },
   extraClientMetadata: {
@@ -242,6 +243,24 @@ Object.defineProperty(fapi.OIDCContext.prototype, 'clientJwtAuthExpectedAudience
   },
 });
 
+const SUITE_ORIGINS = new Set([
+  'https://demo.certification.openid.net',
+  'https://localhost:8443',
+  'https://localhost.emobix.co.uk',
+  'https://localhost.emobix.co.uk:8443',
+  'https://review-app-dev-branch-1.certification.openid.net',
+  'https://review-app-dev-branch-2.certification.openid.net',
+  'https://review-app-dev-branch-3.certification.openid.net',
+  'https://review-app-dev-branch-4.certification.openid.net',
+  'https://review-app-dev-branch-5.certification.openid.net',
+  'https://review-app-dev-branch-6.certification.openid.net',
+  'https://review-app-dev-branch-7.certification.openid.net',
+  'https://review-app-dev-branch-8.certification.openid.net',
+  'https://review-app-dev-branch-9.certification.openid.net',
+  'https://staging.certification.openid.net',
+  'https://www.certification.openid.net',
+]);
+
 Object.defineProperty(fapi.Client.prototype, 'redirectUriAllowed', {
   value(url) {
     let parsed;
@@ -251,20 +270,18 @@ Object.defineProperty(fapi.Client.prototype, 'redirectUriAllowed', {
       return false;
     }
 
-    return parsed.origin === SUITE_BASE_URL && parsed.pathname.endsWith('/callback') && (parsed.search === '' || parsed.search === '?dummy1=lorem&dummy2=ipsum');
+    return SUITE_ORIGINS.has(parsed.origin) && parsed.pathname.endsWith('/callback') && (parsed.search === '' || parsed.search === '?dummy1=lorem&dummy2=ipsum');
   },
 });
 
 const orig = fapi.interactionResult;
 fapi.interactionResult = function patchedInteractionResult(...args) {
-  if (args[2] && args[2].login) {
+  if (args[2]?.login) {
     args[2].login.acr = 'urn:mace:incommon:iap:silver'; // eslint-disable-line no-param-reassign
   }
 
   return orig.call(this, ...args);
 };
-
-function uuid(e){return e?(e^randomBytes(1)[0]%16>>e/4).toString(16):([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,uuid)} // eslint-disable-line
 
 const directives = helmet.contentSecurityPolicy.getDefaultDirectives();
 delete directives['form-action'];
@@ -317,9 +334,8 @@ fapi.use(async (ctx, next) => {
   return next();
 });
 fapi.use((ctx, next) => {
-  if (!('x-fapi-interaction-id' in ctx.headers)) {
-    ctx.headers['x-fapi-interaction-id'] = uuid();
-  }
+  const id = ctx.get('x-fapi-interaction-id') || crypto.randomUUID();
+  ctx.set('x-fapi-interaction-id', id);
   return next();
 });
 
@@ -330,7 +346,7 @@ if (process.env.NODE_ENV === 'production') {
     if (ctx.secure) {
       await next();
 
-      switch (ctx.oidc && ctx.oidc.route) {
+      switch (ctx.oidc?.route) {
         case 'discovery': {
           ['token', 'userinfo', 'pushed_authorization_request', 'backchannel_authentication'].forEach((endpoint) => {
             if (ctx.body[`${endpoint}_endpoint`].startsWith(ISSUER)) {
@@ -352,9 +368,7 @@ if (process.env.NODE_ENV === 'production') {
       ctx.status = 400;
     }
   });
-}
 
-if (SUITE_BASE_URL === OFFICIAL_CERTIFICATION) {
   fapi.listen(PORT);
 } else {
   const server = https.createServer({

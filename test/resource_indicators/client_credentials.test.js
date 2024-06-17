@@ -1,12 +1,12 @@
-const sinon = require('sinon');
-const { expect } = require('chai');
+import sinon from 'sinon';
+import { expect } from 'chai';
 
-const bootstrap = require('../test_helper');
+import bootstrap from '../test_helper.js';
 
 const route = '/token';
 
 describe('grant_type=client_credentials w/ resourceIndicators', () => {
-  before(bootstrap(__dirname, { config: 'client_credentials' }));
+  before(bootstrap(import.meta.url, { config: 'client_credentials' }));
 
   it('provides a Bearer client credentials opaque token', function () {
     const spy = sinon.spy();
@@ -96,6 +96,16 @@ describe('grant_type=client_credentials w/ resourceIndicators', () => {
       .expect(400)
       .expect(/invalid_target/)
       .expect(/only a single resource indicator value is supported/);
+  });
+
+  it('validates each resource to be a valid URI individually', function () {
+    return this.agent.post(route)
+      .auth('client', 'secret')
+      .send('grant_type=client_credentials&scope=api:read&resource=urn:wl:opaque:default&resource=invalid')
+      .type('form')
+      .expect(400)
+      .expect(/invalid_target/)
+      .expect(/resource indicator must be an absolute URI/);
   });
 
   it('checks the policy and adds the resource', async function () {

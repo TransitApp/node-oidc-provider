@@ -1,17 +1,19 @@
-const crypto = require('crypto');
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
-const pkg = require('../../package.json');
-const enabledJWA = JSON.parse(JSON.stringify(require('../../lib/consts/jwa')));
+import { dirname } from 'desm';
 
-function filterOutNone(conf, prop) {
-  // eslint-disable-next-line no-param-reassign
-  conf[prop] = conf[prop].filter((alg) => alg !== 'none');
-}
+const pkg = JSON.parse(
+  fs.readFileSync(path.resolve(dirname(import.meta.url), '../../package.json'), {
+    encoding: 'utf-8',
+  }),
+);
 
-Object.keys(enabledJWA).forEach(filterOutNone.bind(undefined, enabledJWA));
+const enabledJWA = JSON.parse(JSON.stringify(await import('../../lib/consts/jwa.js')));
 
 const timeout = parseInt(process.env.TIMEOUT, 10);
-const tokenEndpointAuthMethods = [
+const clientAuthMethods = [
   'none',
   'client_secret_basic',
   'client_secret_jwt',
@@ -20,7 +22,7 @@ const tokenEndpointAuthMethods = [
   'self_signed_tls_client_auth',
 ];
 
-module.exports = {
+export default {
   interactions: {
     url(ctx, interaction) {
       return `/interaction/${interaction.uid}`;
@@ -53,7 +55,11 @@ module.exports = {
       certificateBoundAccessTokens: true,
       selfSignedTlsClientAuth: true,
       getCertificate(ctx) {
-        return ctx.get('client-certificate');
+        try {
+          return new crypto.X509Certificate(Buffer.from(ctx.get('client-certificate'), 'base64'));
+        } catch {
+          return undefined;
+        }
       },
     },
     claimsParameter: { enabled: true },
@@ -158,6 +164,18 @@ module.exports = {
         kty: 'OKP',
         use: 'sig',
         x: 'BG1zKFg6A_Rzix4pA08oYN5xHqhKIiREXZ59NZoA8p3xhgjh-tm8nc-6udtiL5ZNhWDbnRSq4jQA',
+      }, {
+        crv: 'X25519',
+        d: '2FxH51AcogWa_0iVjUngdfu-HBXXt7qdAeqUKLbRwnA',
+        x: 'k78x74A5JRGr8XW75Rpu7W4_cgZFkm_mvToVAXHDgE8',
+        kty: 'OKP',
+        use: 'enc',
+      }, {
+        crv: 'X448',
+        d: 'ONXShn4L3QWTSuXd2JSTzuwQ0ZJHUu39j35owJ_qtXzRCqWVtkjCo7FXYNxo-mwtFR8xkO-hO8Y',
+        x: 'b30-VJpeXpRLcWtQpr75W2YIN4010rHjfV850uK1Ap9RddHw9Bs7VZ-8lE7-nB7X9E8jLB6C_xw',
+        kty: 'OKP',
+        use: 'enc',
       },
     ],
   },
@@ -173,7 +191,7 @@ module.exports = {
   ttl: {
     RegistrationAccessToken: 1 * 24 * 60 * 60,
   },
-  tokenEndpointAuthMethods,
+  clientAuthMethods,
   httpOptions(gotOptions) {
     gotOptions.timeout = timeout || gotOptions.timeout; // eslint-disable-line no-param-reassign
     return gotOptions;
@@ -183,7 +201,7 @@ module.exports = {
       return false;
     }
 
-    return code.scopes.has('offline_access') || (client.applicationType === 'web' && client.tokenEndpointAuthMethod === 'none');
+    return code.scopes.has('offline_access') || (client.applicationType === 'web' && client.clientAuthMethod === 'none');
   },
   enabledJWA,
   pkce: {

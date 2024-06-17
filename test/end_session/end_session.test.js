@@ -1,17 +1,19 @@
-const { parse: parseUrl } = require('url');
+import { parse as parseUrl } from 'node:url';
 
-const sinon = require('sinon').createSandbox();
-const { expect } = require('chai');
-const timekeeper = require('timekeeper');
+import { createSandbox } from 'sinon';
+import { expect } from 'chai';
+import timekeeper from 'timekeeper';
 
-const bootstrap = require('../test_helper');
-const JWT = require('../../lib/helpers/jwt');
-const { InvalidClient, InvalidRequest } = require('../../lib/helpers/errors');
+import bootstrap from '../test_helper.js';
+import * as JWT from '../../lib/helpers/jwt.js';
+import { InvalidClient, InvalidRequest } from '../../lib/helpers/errors.js';
+
+const sinon = createSandbox();
 
 const route = '/session/end';
 
 describe('logout endpoint', () => {
-  before(bootstrap(__dirname));
+  before(bootstrap(import.meta.url));
   afterEach(() => timekeeper.reset());
 
   describe('when logged out', () => {
@@ -328,7 +330,7 @@ describe('logout endpoint', () => {
             id_token_hint: await JWT.sign({
               aud: 'nonexistant',
               iss: this.provider.issuer,
-            }, null, 'none'),
+            }, Buffer.from('secret'), 'HS256'),
           };
 
           return this.agent.get(route)
@@ -353,7 +355,7 @@ describe('logout endpoint', () => {
             id_token_hint: await JWT.sign({
               aud: 'client',
               iss: this.provider.issuer,
-            }, null, 'none'),
+            }, Buffer.from('not THE secret'), 'HS256'),
           };
 
           return this.agent.get(route)

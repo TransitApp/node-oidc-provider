@@ -1,16 +1,16 @@
 # oidc-provider API documentation
 
-oidc-provider allows to be extended and configured in various ways to fit a variety of use cases. You
+This module to be extended and configured in various ways to fit a variety of use cases. You
 will have to configure your instance with how to find your user accounts, where to store and retrieve
 persisted data from and where your end-user interactions happen. The [example](/example) application
 is a good starting point to get an idea of what you should provide.
 
-> ⚠️⚠️ This page now describes oidc-provider version v7.x documentation. See 
-[here](https://github.com/panva/node-oidc-provider/blob/v6.x/docs/README.md) for v6.x.
+> ⚠️⚠️ This page now describes oidc-provider version v8.x documentation. See 
+[here](https://github.com/panva/node-oidc-provider/blob/v7.x/docs/README.md) for v7.x.
 
 ## Support
 
-If you or your business use oidc-provider, or you need help using/upgrading the module, please consider becoming a [sponsor][support-sponsor] so I can continue maintaining it and adding new features carefree. The only way to guarantee you get feedback from the author & sole maintainer of this module is to support the package through GitHub Sponsors.
+If you or your company use this module, or you need help using/upgrading the module, please consider becoming a [sponsor][support-sponsor] so I can continue maintaining it and adding new features carefree. The only way to guarantee you get feedback from the author & sole maintainer of this module is to support the package through GitHub Sponsors.
 
 <br>
 
@@ -40,7 +40,7 @@ If you or your business use oidc-provider, or you need help using/upgrading the 
 ## Basic configuration example
 
 ```js
-const { Provider } = require('oidc-provider');
+import Provider from 'oidc-provider';
 const configuration = {
   // ... see the available options in Configuration options section
   clients: [{
@@ -69,7 +69,7 @@ const server = oidc.listen(3000, () => {
 
 ## Accounts
 
-oidc-provider needs to be able to find an account and once found the account needs to have an
+This module needs to be able to find an account and once found the account needs to have an
 `accountId` property as well as `claims()` function returning an object with claims that correspond
 to the claims your issuer supports. Tell oidc-provider how to find your account by an ID.
 `#claims()` can also return a Promise later resolved / rejected.
@@ -88,11 +88,11 @@ const oidc = new Provider('http://localhost:3000', {
 
 ## User flows
 Since oidc-provider only comes with feature-less views and interaction handlers it is up to you to fill
-those in, here is how oidc-provider allows you to do so:
+those in, here is how this module allows you to do so:
 
 When oidc-provider cannot fulfill the authorization request for any of the possible reasons (missing
 user session, requested ACR not fulfilled, prompt requested, ...) it will resolve the 
-[`interactions.url`](#interactionsurl) helper function and redirect the User-Agent to that url. Before
+[`interactions.url`](#interactionsurl) helper function and redirect the User-Agent to that URL. Before
 doing so it will save a short-lived "interaction session" and dump its identifier into a cookie scoped to the
 resolved interaction path.
 
@@ -101,7 +101,7 @@ This interaction session contains:
 - details of the interaction that is required
 - all authorization request parameters
 - current end-user session account ID should there be one
-- the url to redirect the user to once interaction is finished
+- the URL to redirect the user to once interaction is finished
 
 oidc-provider expects that you resolve the prompt interaction and then redirect the User-Agent back
 with the results.
@@ -146,8 +146,9 @@ router.post('/interaction/:uid', async (ctx, next) => {
   // authentication/login prompt got resolved, omit if no authentication happened, i.e. the user
   // cancelled
   login: {
-    accountId: '7ff1d19a-d3fd-4863-978e-8cce75fa880c', // logged-in account id
+    accountId: string, // logged-in account id
     acr: string, // acr value for the authentication
+    amr: string[], // amr values for the authentication
     remember: boolean, // true if provider should use a persistent cookie rather than a session one, defaults to true
     ts: number, // unix timestamp of the authentication, defaults to now()
   },
@@ -226,7 +227,7 @@ instance directly to register i.e. koa-helmet you must push the middleware in
 front of oidc-provider in the middleware stack.
 
 ```js
-const helmet = require('koa-helmet');
+import helmet from 'koa-helmet';
 
 // Correct, pushes koa-helmet at the end of the middleware stack but BEFORE oidc-provider.
 provider.use(helmet());
@@ -310,7 +311,7 @@ fastify.use('/oidc', oidc.callback());
 
 ### to a `hapi` application
 ```js
-// assumes @hapi/hapi ^20.0.0
+// assumes @hapi/hapi ^21.0.0
 const callback = oidc.callback();
 hapiApp.route({
   path: `/oidc/{any*}`,
@@ -320,10 +321,8 @@ hapiApp.route({
     req.originalUrl = req.url;
     req.url = req.url.replace('/oidc', '');
 
-    await new Promise((resolve) => {
-      res.on('finish', resolve);
-      callback(req, res);
-    });
+    callback(req, res);
+    await once(res, 'finish');
 
     req.url = req.url.replace('/', '/oidc');
     delete req.originalUrl;
@@ -359,14 +358,15 @@ expressApp.use('/oidc', oidc.callback());
 ```js
 // assumes koa ^2.0.0
 // assumes koa-mount ^4.0.0
-const mount = require('koa-mount');
+import mount from 'koa-mount';
 koaApp.use(mount('/oidc', oidc.app));
 ```
 
 Note: when the issuer identifier does not include the path prefix you should take care of rewriting
 your `${root}/.well-known/openid-configuration` to `${root}${prefix}/.well-known/openid-configuration`
 so that your deployment remains conform to the
-[Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html) specification.
+[Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationRequest)
+specification.
 
 ## Trusting TLS offloading proxies
 
@@ -440,6 +440,7 @@ location / {
   - [requestObjects](#featuresrequestobjects)
   - [resourceIndicators ❗](#featuresresourceindicators)
   - [revocation](#featuresrevocation)
+  - [rpInitiatedLogout](#featuresrpinitiatedlogout)
   - [userinfo](#featuresuserinfo)
 - [acrValues](#acrvalues)
 - [allowOmittingSingleRegisteredRedirectUri](#allowomittingsingleregisteredredirecturi)
@@ -468,7 +469,7 @@ location / {
 - [sectorIdentifierUriValidate](#sectoridentifierurivalidate)
 - [scopes](#scopes)
 - [subjectTypes](#subjecttypes)
-- [tokenEndpointAuthMethods](#tokenendpointauthmethods)
+- [clientAuthMethods](#clientauthmethods)
 - [ttl ❗](#ttl)
 - [enabledJWA](#enabledjwa)
 
@@ -522,7 +523,7 @@ _**default value**_:
 <a id="clients-available-metadata"></a><details><summary>(Click to expand) Available Metadata</summary><br>
 
 
-application_type, client_id, client_name, client_secret, client_uri, contacts, default_acr_values, default_max_age, grant_types, id_token_signed_response_alg, initiate_login_uri, jwks, jwks_uri, logo_uri, policy_uri, post_logout_redirect_uris, redirect_uris, require_auth_time, response_types, scope, sector_identifier_uri, subject_type, token_endpoint_auth_method, tos_uri, userinfo_signed_response_alg <br/><br/>The following metadata is available but may not be recognized depending on your provider's configuration.<br/><br/> authorization_encrypted_response_alg, authorization_encrypted_response_enc, authorization_signed_response_alg, backchannel_logout_session_required, backchannel_logout_uri, id_token_encrypted_response_alg, id_token_encrypted_response_enc, introspection_encrypted_response_alg, introspection_encrypted_response_enc, introspection_endpoint_auth_method, introspection_endpoint_auth_signing_alg, introspection_signed_response_alg, request_object_encryption_alg, request_object_encryption_enc, request_object_signing_alg, request_uris, revocation_endpoint_auth_method, revocation_endpoint_auth_signing_alg, tls_client_auth_san_dns, tls_client_auth_san_email, tls_client_auth_san_ip, tls_client_auth_san_uri, tls_client_auth_subject_dn, tls_client_certificate_bound_access_tokens, token_endpoint_auth_signing_alg, userinfo_encrypted_response_alg, userinfo_encrypted_response_enc, web_message_uris  
+application_type, client_id, client_name, client_secret, client_uri, contacts, default_acr_values, default_max_age, grant_types, id_token_signed_response_alg, initiate_login_uri, jwks, jwks_uri, logo_uri, policy_uri, post_logout_redirect_uris, redirect_uris, require_auth_time, response_types, scope, sector_identifier_uri, subject_type, token_endpoint_auth_method, tos_uri, userinfo_signed_response_alg <br/><br/>The following metadata is available but may not be recognized depending on your provider's configuration.<br/><br/> authorization_encrypted_response_alg, authorization_encrypted_response_enc, authorization_signed_response_alg, backchannel_logout_session_required, backchannel_logout_uri, id_token_encrypted_response_alg, id_token_encrypted_response_enc, introspection_encrypted_response_alg, introspection_encrypted_response_enc, introspection_signed_response_alg, request_object_encryption_alg, request_object_encryption_enc, request_object_signing_alg, request_uris, tls_client_auth_san_dns, tls_client_auth_san_email, tls_client_auth_san_ip, tls_client_auth_san_uri, tls_client_auth_subject_dn, tls_client_certificate_bound_access_tokens, token_endpoint_auth_signing_alg, userinfo_encrypted_response_alg, userinfo_encrypted_response_enc, web_message_uris  
 
 
 </details>
@@ -624,7 +625,7 @@ new Provider('http://localhost:3000', {
 
 ### features.backchannelLogout
 
-[Back-Channel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0-final.html)  
+[`OIDC Back-Channel Logout 1.0`](https://openid.net/specs/openid-connect-backchannel-1_0-final.html)  
 
 Enables Back-Channel Logout features.  
 
@@ -638,9 +639,9 @@ _**default value**_:
 
 ### features.ciba
 
-[OpenID Connect Client Initiated Backchannel Authentication Flow - Core 1.0](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0-final.html)  
+[OIDC Client Initiated Backchannel Authentication Flow (`CIBA`)](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0-final.html)  
 
-Enables Core CIBA Flow, when combined with `features.fapi` enables [Financial-grade API: Client Initiated Backchannel Authentication Profile - Implementer's Draft 01](https://openid.net/specs/openid-financial-api-ciba-ID1.html) as well.   
+Enables Core `CIBA` Flow, when combined with `features.fapi` and `features.requestObjects.request` enables [Financial-grade API: Client Initiated Backchannel Authentication Profile - Implementer's Draft 01](https://openid.net/specs/openid-financial-api-ciba-ID1.html) as well.   
   
 
 
@@ -683,7 +684,7 @@ _**default value**_:
 Helper function used to process the login_hint parameter and return the accountId value to use for processsing the request.   
   
 
-_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when login_hint is invalid.  
+_**recommendation**_: Use `throw new errors.InvalidRequest('validation error message')` when login_hint is invalid.  
 
 _**recommendation**_: Use `return undefined` or when you can't determine the accountId from the login_hint.  
 
@@ -702,9 +703,9 @@ async function processLoginHint(ctx, loginHint) {
 Helper function used to process the login_hint_token parameter and return the accountId value to use for processsing the request.   
   
 
-_**recommendation**_: Use `throw Provider.errors.ExpiredLoginHintToken('validation error message')` when login_hint_token is expired.  
+_**recommendation**_: Use `throw new errors.ExpiredLoginHintToken('validation error message')` when login_hint_token is expired.  
 
-_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when login_hint_token is invalid.  
+_**recommendation**_: Use `throw new errors.InvalidRequest('validation error message')` when login_hint_token is invalid.  
 
 _**recommendation**_: Use `return undefined` or when you can't determine the accountId from the login_hint.  
 
@@ -747,7 +748,7 @@ await provider.backchannelResult(...);
 ```
 `backchannelResult(request, result[, options]);`
  - `request` BackchannelAuthenticationRequest - BackchannelAuthenticationRequest instance.
- - `result` Grant | OIDCProviderError - instance of a persisted Grant model or an OIDCProviderError (all exported by Provider.errors).
+ - `result` Grant | OIDCProviderError - instance of a persisted Grant model or an OIDCProviderError (all exported by errors).
  - `options.acr?`: string - Authentication Context Class Reference value that identifies the Authentication Context Class that the authentication performed satisfied.
  - `options.amr?`: string[] - Identifiers for authentication methods used in the authentication.
  - `options.authTime?`: number - Time when the End-User authentication occurred.  
@@ -760,7 +761,7 @@ await provider.backchannelResult(...);
 Helper function used to process the binding_message parameter and throw if its not following the authorization server's policy.   
   
 
-_**recommendation**_: Use `throw Provider.errors.InvalidBindingMessage('validation error message')` when the binding_message is invalid.  
+_**recommendation**_: Use `throw new errors.InvalidBindingMessage('validation error message')` when the binding_message is invalid.  
 
 _**recommendation**_: Use `return undefined` when a binding_message isn't required and wasn't provided.  
 
@@ -781,7 +782,7 @@ async function validateBindingMessage(ctx, bindingMessage) {
 Helper function used to process the request_context parameter and throw if its not following the authorization server's policy.   
   
 
-_**recommendation**_: Use `throw Provider.errors.InvalidRequest('validation error message')` when the request_context is required by policy and missing or invalid.  
+_**recommendation**_: Use `throw new errors.InvalidRequest('validation error message')` when the request_context is required by policy and missing or invalid.  
 
 _**recommendation**_: Use `return undefined` when a request_context isn't required and wasn't provided.  
 
@@ -800,9 +801,9 @@ async function validateRequestContext(ctx, requestContext) {
 Helper function used to verify the user_code parameter value is present when required and verify its value.   
   
 
-_**recommendation**_: Use `throw Provider.errors.MissingUserCode('validation error message')` when user_code should have been provided but wasn't.  
+_**recommendation**_: Use `throw new errors.MissingUserCode('validation error message')` when user_code should have been provided but wasn't.  
 
-_**recommendation**_: Use `throw Provider.errors.InvalidUserCode('validation error message')` when the provided user_code is invalid.  
+_**recommendation**_: Use `throw new errors.InvalidUserCode('validation error message')` when the provided user_code is invalid.  
 
 _**recommendation**_: Use `return undefined` when no user_code was provided and isn't required.  
 
@@ -821,7 +822,7 @@ async function verifyUserCode(ctx, account, userCode) {
 
 ### features.claimsParameter
 
-[Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter) - Requesting Claims using the "claims" Request Parameter  
+[`OIDC Core 1.0`](https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter) - Requesting Claims using the "claims" Request Parameter  
 
 Enables the use and validations of `claims` parameter as described in the specification.   
   
@@ -836,7 +837,7 @@ _**default value**_:
 
 ### features.clientCredentials
 
-[RFC6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3.4) - Client Credentials  
+[`RFC6749`](https://www.rfc-editor.org/rfc/rfc6749.html#section-1.3.4) - Client Credentials  
 
 Enables `grant_type=client_credentials` to be used on the token endpoint.  
 
@@ -850,12 +851,9 @@ _**default value**_:
 
 ### features.dPoP
 
-[draft-ietf-oauth-dpop-03](https://tools.ietf.org/html/draft-ietf-oauth-dpop-03) - OAuth 2.0 Demonstration of Proof-of-Possession at the Application Layer (DPoP)  
+[`RFC9449`](https://www.rfc-editor.org/rfc/rfc9449.html) - OAuth 2.0 Demonstration of Proof-of-Possession at the Application Layer (`DPoP`)  
 
-Enables `DPoP` - mechanism for sender-constraining tokens via a proof-of-possession mechanism on the application level. Browser DPoP Proof generation [here](https://www.npmjs.com/package/dpop).   
-  
-
-_**recommendation**_: Updates to draft specification versions are released as MINOR library versions, if you utilize these specification implementations consider using the tilde `~` operator in your package.json since breaking changes may be introduced as part of these version updates. Alternatively, [acknowledge](#features) the version and be notified of breaking changes as part of your CI.  
+Enables `DPoP` - mechanism for sender-constraining tokens via a proof-of-possession mechanism on the application level. Browser DPoP proof generation [here](https://www.npmjs.com/package/dpop).  
 
 
 _**default value**_:
@@ -863,9 +861,37 @@ _**default value**_:
 {
   ack: undefined,
   enabled: false,
-  iatTolerance: 60
+  nonceSecret: undefined,
+  requireNonce: [Function: requireNonce] // see expanded details below
 }
 ```
+
+<details><summary>(Click to expand) features.dPoP options details</summary><br>
+
+
+#### nonceSecret
+
+A secret value used for generating server-provided DPoP nonces. Must be a 32-byte length Buffer instance when provided.  
+
+
+_**default value**_:
+```js
+undefined
+```
+
+#### requireNonce
+
+Function used to determine whether a DPoP nonce is required or not.  
+
+
+_**default value**_:
+```js
+function requireNonce(ctx) {
+  return false;
+}
+```
+
+</details>
 
 ### features.devInteractions
 
@@ -882,7 +908,7 @@ _**default value**_:
 
 ### features.deviceFlow
 
-[RFC8628](https://www.rfc-editor.org/rfc/rfc8628.html) - OAuth 2.0 Device Authorization Grant (Device Flow)  
+[`RFC8628`](https://www.rfc-editor.org/rfc/rfc8628.html) - OAuth 2.0 Device Authorization Grant (`Device Flow`)  
 
 Enables Device Authorization Grant  
 
@@ -917,7 +943,7 @@ _**default value**_:
 
 #### deviceInfo
 
-Function used to extract details from the device authorization endpoint request. This is then available during the end-user confirm screen and is supposed to aid the user confirm that the particular authorization initiated by the user from a device in his possession  
+Function used to extract details from the device authorization endpoint request. This is then available during the end-user confirm screen and is supposed to aid the user confirm that the particular authorization initiated by the user from a device in their possession.  
 
 
 _**default value**_:
@@ -932,7 +958,7 @@ function deviceInfo(ctx) {
 
 #### mask
 
-a string used as a template for the generated user codes, `*` characters will be replaced by random chars from the charset, `-`(dash) and ` ` (space) characters may be included for readability. See the RFC for details about minimal recommended entropy  
+a string used as a template for the generated user codes, `*` characters will be replaced by random chars from the charset, `-`(dash) and ` ` (space) characters may be included for readability. See the RFC for details about minimal recommended entropy.  
 
 
 _**default value**_:
@@ -953,6 +979,7 @@ async function successSource(ctx) {
     clientId, clientName, clientUri, initiateLoginUri, logoUri, policyUri, tosUri,
   } = ctx.oidc.client;
   ctx.body = `<!DOCTYPE html>
+    <html>
     <head>
       <title>Sign-in Success</title>
       <style>/* css and html classes omitted for brevity, see lib/helpers/defaults.js */</style>
@@ -984,6 +1011,7 @@ async function userCodeConfirmSource(ctx, form, client, deviceInfo, userCode) {
     clientId, clientName, clientUri, logoUri, policyUri, tosUri,
   } = ctx.oidc.client;
   ctx.body = `<!DOCTYPE html>
+    <html>
     <head>
       <title>Device Login Confirmation</title>
       <style>/* css and html classes omitted for brevity, see lib/helpers/defaults.js */</style>
@@ -1036,6 +1064,7 @@ async function userCodeInputSource(ctx, form, out, err) {
     msg = '<p>Enter the code displayed on your device</p>';
   }
   ctx.body = `<!DOCTYPE html>
+    <html>
     <head>
       <title>Sign-in</title>
       <style>/* css and html classes omitted for brevity, see lib/helpers/defaults.js */</style>
@@ -1068,61 +1097,40 @@ _**default value**_:
 
 ### features.fapi
 
-Financial-grade API Security Profile  
+Financial-grade API Security Profile (`FAPI`)  
 
-Enables extra Authorization Server behaviours defined in FAPI that cannot be achieved by other configuration options.   
-  
+Enables extra Authorization Server behaviours defined in FAPI that cannot be achieved by other configuration options.  
 
 
 _**default value**_:
 ```js
 {
   enabled: false,
-  profile: '1.0 Final'
+  profile: undefined
 }
 ```
-<a id="features-fapi-other-configuration-needed-to-reach-fapi-conformance"></a><details><summary>(Click to expand) other configuration needed to reach FAPI conformance
-</summary><br>
-
-
-- `clientDefaults` for setting different default client `token_endpoint_auth_method`
- - `clientDefaults` for setting different default client `id_token_signed_response_alg`
- - `clientDefaults` for setting different default client `response_types`
- - `clientDefaults` for setting client `tls_client_certificate_bound_access_tokens` to true
- - `clientDefaults` for setting client `require_signed_request_object` to true
- - `clientDefaults` for setting client `default_acr_values` to whatever values are set by the specific FAPI ecosystem
- - `features.mTLS` and enable `certificateBoundAccessTokens`
- - `features.mTLS` and enable `selfSignedTlsClientAuth` and/or `tlsClientAuth`
- - `features.claimsParameter`
- - `features.requestObjects` and enable `request` and/or `request_uri`
- - `enabledJWA` algorithm allow lists
- - (optional) `features.pushedAuthorizationRequests`
- - (optional) `features.jwtResponseModes`  
-
-
-</details>
 
 <details><summary>(Click to expand) features.fapi options details</summary><br>
 
 
 #### profile
 
-The specific profile of FAPI to enable. Supported values are:   
- - '1.0 Final' (default) Enables behaviours from [Financial-grade API Security Profile 1.0 - Part 2: Advanced](https://openid.net/specs/openid-financial-api-part-2-1_0.html)
+The specific profile of `FAPI` to enable. Supported values are:   
+ - '1.0 Final' Enables behaviours from [Financial-grade API Security Profile 1.0 - Part 2: Advanced](https://openid.net/specs/openid-financial-api-part-2-1_0.html)
  - '1.0 ID2' Enables behaviours from [Financial-grade API - Part 2: Read and Write API Security Profile - Implementer's Draft 02](https://openid.net/specs/openid-financial-api-part-2-ID2.html)
- - Function returning one of the other supported values, or undefined if FAPI behaviours are to be ignored. The function is invoked with two arguments `(ctx, client)` and serves the purpose of allowing the used profile to be context-specific.  
+ - Function returning one of the other supported values, or undefined if `FAPI` behaviours are to be ignored. The function is invoked with two arguments `(ctx, client)` and serves the purpose of allowing the used profile to be context-specific.  
 
 
 _**default value**_:
 ```js
-'1.0 Final'
+undefined
 ```
 
 </details>
 
 ### features.introspection
 
-[RFC7662](https://www.rfc-editor.org/rfc/rfc7662.html) - OAuth 2.0 Token Introspection  
+[`RFC7662`](https://www.rfc-editor.org/rfc/rfc7662.html) - OAuth 2.0 Token Introspection  
 
 Enables Token Introspection for:
  - opaque access tokens
@@ -1149,7 +1157,7 @@ Helper function used to determine whether the client/RS (client argument) is all
 _**default value**_:
 ```js
 async function introspectionAllowedPolicy(ctx, client, token) {
-  if (client.introspectionEndpointAuthMethod === 'none' && token.clientId !== ctx.oidc.client.clientId) {
+  if (client.clientAuthMethod === 'none' && token.clientId !== ctx.oidc.client.clientId) {
     return false;
   }
   return true;
@@ -1178,7 +1186,7 @@ _**default value**_:
 
 ### features.jwtResponseModes
 
-[JWT Secured Authorization Response Mode (JARM)](https://openid.net/specs/oauth-v2-jarm.html)  
+[JWT Secured Authorization Response Mode (`JARM`)](https://openid.net/specs/oauth-v2-jarm.html)  
 
 Enables JWT Secured Authorization Responses  
 
@@ -1192,7 +1200,7 @@ _**default value**_:
 
 ### features.jwtUserinfo
 
-[Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo) - JWT UserInfo Endpoint Responses  
+[`OIDC Core 1.0`](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo) - JWT UserInfo Endpoint Responses  
 
 Enables the userinfo to optionally return signed and/or encrypted JWTs, also enables the relevant client metadata for setting up signing and/or encryption.  
 
@@ -1206,7 +1214,7 @@ _**default value**_:
 
 ### features.mTLS
 
-[RFC8705](https://www.rfc-editor.org/rfc/rfc8705.html) - OAuth 2.0 Mutual TLS Client Authentication and Certificate Bound Access Tokens (MTLS)  
+[`RFC8705`](https://www.rfc-editor.org/rfc/rfc8705.html) - OAuth 2.0 Mutual TLS Client Authentication and Certificate Bound Access Tokens (`MTLS`)  
 
 Enables specific features from the Mutual TLS specification. The three main features have their own specific setting in this feature's configuration object and you must provide functions for resolving some of the functions which are deployment-specific.   
   
@@ -1230,30 +1238,15 @@ _**default value**_:
 
 #### certificateAuthorized
 
-Function used to determine if the client certificate, used in the request, is verified and comes from a trusted CA for the client. Should return true/false. Only used for `tls_client_auth` client authentication method.   
-  
-
-<a id="certificate-authorized-when-behind-a-tls-terminating-proxy-nginx-apache"></a><details><summary>(Click to expand) When behind a TLS terminating proxy (nginx/apache)</summary><br>
+Function used to determine if the client certificate, used in the request, is verified and comes from a trusted CA for the client. Should return true/false. Only used for `tls_client_auth` client authentication method.  
 
 
-When behind a TLS terminating proxy it is common that this detail be passed to the application as a sanitized header. This returns the chosen header value provided by nginx's `$ssl_client_verify` or apache's `%{SSL_CLIENT_VERIFY}s`
-  
-
+_**default value**_:
 ```js
 function certificateAuthorized(ctx) {
-  return ctx.get('x-ssl-client-verify') === 'SUCCESS';
+  throw new Error('features.mTLS.certificateAuthorized function not configured');
 }
 ```
-</details>
-<a id="certificate-authorized-when-using-node's-https-create-server"></a><details><summary>(Click to expand) When using node's `https.createServer`
-</summary><br>
-
-```js
-function certificateAuthorized(ctx) {
-  return ctx.socket.authorized;
-}
-```
-</details>
 
 #### certificateBoundAccessTokens
 
@@ -1267,60 +1260,31 @@ false
 
 #### certificateSubjectMatches
 
-Function used to determine if the client certificate, used in the request, subject matches the registered client property. Only used for `tls_client_auth` client authentication method.   
-  
-
-<a id="certificate-subject-matches-when-behind-a-tls-terminating-proxy-nginx-apache"></a><details><summary>(Click to expand) When behind a TLS terminating proxy (nginx/apache)</summary><br>
+Function used to determine if the client certificate, used in the request, subject matches the registered client property. Only used for `tls_client_auth` client authentication method.  
 
 
-TLS terminating proxies can pass a header with the Subject DN pretty easily, for Nginx this would be `$ssl_client_s_dn`, for apache `%{SSL_CLIENT_S_DN}s`.
-  
-
+_**default value**_:
 ```js
 function certificateSubjectMatches(ctx, property, expected) {
-  switch (property) {
-    case 'tls_client_auth_subject_dn':
-      return ctx.get('x-ssl-client-s-dn') === expected;
-    default:
-      throw new Error(`${property} certificate subject matching not implemented`);
-  }
+  throw new Error('features.mTLS.certificateSubjectMatches function not configured');
 }
 ```
-</details>
 
 #### getCertificate
 
-Function used to retrieve the PEM-formatted client certificate used in the request.   
-  
-
-<a id="get-certificate-when-behind-a-tls-terminating-proxy-nginx-apache"></a><details><summary>(Click to expand) When behind a TLS terminating proxy (nginx/apache)</summary><br>
+Function used to retrieve a `crypto.X509Certificate` instance, or a PEM-formatted string, representation of client certificate used in the request.  
 
 
-When behind a TLS terminating proxy it is common that the certificate be passed to the application as a sanitized header. This returns the chosen header value provided by nginx's `$ssl_client_cert` or apache's `%{SSL_CLIENT_CERT}s`
-  
-
+_**default value**_:
 ```js
 function getCertificate(ctx) {
-  return ctx.get('x-ssl-client-cert');
+  throw new Error('features.mTLS.getCertificate function not configured');
 }
 ```
-</details>
-<a id="get-certificate-when-using-node's-https-create-server"></a><details><summary>(Click to expand) When using node's `https.createServer`
-</summary><br>
-
-```js
-function getCertificate(ctx) {
-  const peerCertificate = ctx.socket.getPeerCertificate();
-  if (peerCertificate.raw) {
-    return `-----BEGIN CERTIFICATE-----\n${peerCertificate.raw.toString('base64')}\n-----END CERTIFICATE-----`;
-  }
-}
-```
-</details>
 
 #### selfSignedTlsClientAuth
 
-Enables section 2.2. Self-Signed Certificate Mutual TLS client authentication method `self_signed_tls_client_auth` for use in the server's `tokenEndpointAuthMethods` configuration.  
+Enables section 2.2. Self-Signed Certificate Mutual TLS client authentication method `self_signed_tls_client_auth` for use in the server's `clientAuthMethods` configuration.  
 
 
 _**default value**_:
@@ -1330,7 +1294,7 @@ false
 
 #### tlsClientAuth
 
-Enables section 2.1. PKI Mutual TLS client authentication method `tls_client_auth` for use in the server's `tokenEndpointAuthMethods` configuration.  
+Enables section 2.1. PKI Mutual TLS client authentication method `tls_client_auth` for use in the server's `clientAuthMethods` configuration.  
 
 
 _**default value**_:
@@ -1342,7 +1306,7 @@ false
 
 ### features.pushedAuthorizationRequests
 
-[RFC9126](https://www.rfc-editor.org/rfc/rfc9126.html) - OAuth 2.0 Pushed Authorization Requests (PAR)  
+[`RFC9126`](https://www.rfc-editor.org/rfc/rfc9126.html) - OAuth 2.0 Pushed Authorization Requests (`PAR`)  
 
 Enables the use of `pushed_authorization_request_endpoint` defined by the Pushed Authorization Requests RFC.  
 
@@ -1350,7 +1314,7 @@ Enables the use of `pushed_authorization_request_endpoint` defined by the Pushed
 _**default value**_:
 ```js
 {
-  enabled: false,
+  enabled: true,
   requirePushedAuthorizationRequests: false
 }
 ```
@@ -1360,7 +1324,7 @@ _**default value**_:
 
 #### requirePushedAuthorizationRequests
 
-Makes the use of PAR required for all authorization requests as an OP policy.  
+Makes the use of `PAR` required for all authorization requests as an OP policy.  
 
 
 _**default value**_:
@@ -1372,7 +1336,7 @@ false
 
 ### features.registration
 
-[Dynamic Client Registration 1.0](https://openid.net/specs/openid-connect-registration-1_0.html)  
+[`Dynamic Client Registration 1.0`](https://openid.net/specs/openid-connect-registration-1_0.html) and [`RFC7591` - OAuth 2.0 Dynamic Client Registration Protocol](https://www.rfc-editor.org/rfc/rfc7591.html)  
 
 Enables Dynamic Client Registration.  
 
@@ -1488,7 +1452,7 @@ To define policy functions configure `features.registration` to be an object lik
       properties.userinfo_signed_response_alg = 'RS256';
       // example of throwing a validation error
       if (someCondition(ctx, properties)) {
-        throw new Provider.errors.InvalidClientMetadata('validation error message');
+        throw new errors.InvalidClientMetadata('validation error message');
       }
     },
     'my-policy-2': async function (ctx, properties) {},
@@ -1530,7 +1494,7 @@ _**default value**_:
 ```js
 {
   enabled: false,
-  rotateRegistrationAccessToken: false
+  rotateRegistrationAccessToken: true
 }
 ```
 
@@ -1547,7 +1511,7 @@ Enables registration access token rotation. The provider will discard the curren
 
 _**default value**_:
 ```js
-false
+true
 ```
 <a id="rotate-registration-access-token-function-use"></a><details><summary>(Click to expand) function use
 </summary><br>
@@ -1572,7 +1536,7 @@ false
 
 ### features.requestObjects
 
-[Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#RequestObject) and [JWT Secured Authorization Request (JAR)](https://www.rfc-editor.org/rfc/rfc9101.html) - Request Object  
+[`OIDC Core 1.0`](https://openid.net/specs/openid-connect-core-1_0.html#RequestObject) and [JWT Secured Authorization Request (`JAR`)](https://www.rfc-editor.org/rfc/rfc9101.html) - Request Object  
 
 Enables the use and validations of the `request` and/or `request_uri` parameters.  
 
@@ -1580,9 +1544,9 @@ Enables the use and validations of the `request` and/or `request_uri` parameters
 _**default value**_:
 ```js
 {
-  mode: 'lax',
+  mode: 'strict',
   request: false,
-  requestUri: true,
+  requestUri: false,
   requireSignedRequestObject: false,
   requireUriRegistration: true
 }
@@ -1595,14 +1559,14 @@ _**default value**_:
 
 defines the provider's strategy when it comes to using regular OAuth 2.0 parameters that are present. Parameters inside the Request Object are ALWAYS used, this option controls whether to combine those with the regular ones or not.   
  Supported values are:   
- - 'lax' (default) This is the behaviour expected by OIDC Core 1.0 - all parameters that are not present in the Resource Object are used when resolving the authorization request.
- - 'strict' This is the behaviour expected by FAPI or JAR, all parameters outside of the Request Object are ignored. For FAPI and FAPI-CIBA this value is enforced.   
+ - 'lax' This is the behaviour expected by `OIDC Core 1.0` - all parameters that are not present in the Resource Object are used when resolving the authorization request.
+ - 'strict' (default) All parameters outside of the Request Object are ignored. For `PAR`, `FAPI`, and `CIBA` this value is enforced.   
   
 
 
 _**default value**_:
 ```js
-'lax'
+'strict'
 ```
 
 #### request
@@ -1622,7 +1586,7 @@ Enables the use and validations of the `request_uri` parameter.
 
 _**default value**_:
 ```js
-true
+false
 ```
 
 #### requireSignedRequestObject
@@ -1649,7 +1613,7 @@ true
 
 ### features.resourceIndicators
 
-[RFC8707](https://www.rfc-editor.org/rfc/rfc8707.html) - Resource Indicators for OAuth 2.0  
+[`RFC8707`](https://www.rfc-editor.org/rfc/rfc8707.html) - Resource Indicators for OAuth 2.0  
 
 Enables the use of `resource` parameter for the authorization and token endpoints to enable issuing Access Tokens for Resource Servers (APIs).   
  - Multiple resource parameters may be present during Authorization Code Flow, Device Authorization Grant, and Backchannel Authentication Requests, but only a single audience for an Access Token is permitted.
@@ -1745,21 +1709,6 @@ async function getResourceServerInfo(ctx, resourceIndicator, client) {
 }
 ```
 </details>
-<a id="get-resource-server-info-resource-server-api-with-two-scopes-and-a-v-1-local-paseto-access-token-format"></a><details><summary>(Click to expand) Resource Server (API) with two scopes and a v1.local PASETO Access Token Format.
-</summary><br>
-
-```js
-{
-  scope: 'api:read api:write',
-  accessTokenFormat: 'paseto',
-  paseto: {
-    version: 1,
-    purpose: 'local',
-    key: Buffer.from('f40dd9591646bebcb9c32aed02f5e610c2d15e1d38cde0c1fe14a55cf6bfe2d9', 'hex')
-  }
-}
-```
-</details>
 <a id="get-resource-server-info-resource-server-definition"></a><details><summary>(Click to expand) Resource Server Definition
 </summary><br>
 
@@ -1778,7 +1727,7 @@ async function getResourceServerInfo(ctx, resourceIndicator, client) {
   accessTokenTTL?: number,
   // Issued Token Format
   // Default is - opaque
-  accessTokenFormat?: 'opaque' | 'jwt' | 'paseto',
+  accessTokenFormat?: 'opaque' | 'jwt',
   // JWT Access Token Format (when accessTokenFormat is 'jwt')
   // Default is `{ sign: { alg: 'RS256' }, encrypt: false }`
   // Tokens may be signed, signed and then encrypted, or just encrypted JWTs.
@@ -1796,19 +1745,11 @@ async function getResourceServerInfo(ctx, resourceIndicator, client) {
        },
     // Tokens will be encrypted
     encrypt?: {
-      alg: string, // 'dir' | 'RSA-OAEP' | 'RSA-OAEP-256' | 'RSA-OAEP-384' | 'RSA-OAEP-512' | 'RSA1_5' | 'ECDH-ES' | 'ECDH-ES+A128KW' | 'ECDH-ES+A192KW' | 'ECDH-ES+A256KW' | 'A128KW' | 'A192KW' | 'A256KW' | 'A128GCMKW' | 'A192GCMKW' | 'A256GCMKW' | 'PBES2-HS256+A128KW' | 'PBES2-HS384+A192KW' | 'PBES2-HS512+A256KW'
+      alg: string, // 'dir' | 'RSA-OAEP' | 'RSA-OAEP-256' | 'RSA-OAEP-384' | 'RSA-OAEP-512' | 'ECDH-ES' | 'ECDH-ES+A128KW' | 'ECDH-ES+A192KW' | 'ECDH-ES+A256KW' | 'A128KW' | 'A192KW' | 'A256KW' | 'A128GCMKW' | 'A192GCMKW' | 'A256GCMKW'
       enc: string, // 'A128CBC-HS256' | 'A128GCM' | 'A192CBC-HS384' | 'A192GCM' | 'A256CBC-HS512' | 'A256GCM'
       key: crypto.KeyObject | Buffer, // public key or shared symmetric secret to encrypt the JWT token with
       kid?: string, // OPTIONAL `kid` JOSE Header Parameter to put in the token's JWE Header
     }
-  }
-  // PASETO Access Token Format (when accessTokenFormat is 'paseto')
-  // Note: v2.local and v4.local are NOT supported
-  paseto?: {
-    version: 1 | 2 | 3 | 4,
-    purpose: 'local' | 'public',
-    key?: crypto.KeyObject, // required when purpose is 'local'
-    kid?: string, // OPTIONAL `kid` to aid in signing key selection or to put in the footer for 'local'
   }
 }
 ```
@@ -1838,7 +1779,7 @@ async function useGrantedResource(ctx, model) {
 
 ### features.revocation
 
-[RFC7009](https://www.rfc-editor.org/rfc/rfc7009.html) - OAuth 2.0 Token Revocation  
+[`RFC7009`](https://www.rfc-editor.org/rfc/rfc7009.html) - OAuth 2.0 Token Revocation  
 
 Enables Token Revocation for:
  - opaque access tokens
@@ -1855,7 +1796,7 @@ _**default value**_:
 
 ### features.rpInitiatedLogout
 
-[RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0-final.html)  
+[`OIDC RP-Initiated Logout 1.0`](https://openid.net/specs/openid-connect-rpinitiated-1_0-final.html)  
 
 Enables RP-Initiated Logout features  
 
@@ -1884,6 +1825,7 @@ async function logoutSource(ctx, form) {
   // @param form - form source (id="op.logoutForm") to be embedded in the page and submitted by
   //   the End-User
   ctx.body = `<!DOCTYPE html>
+    <html>
     <head>
       <title>Logout Request</title>
       <style>/* css and html classes omitted for brevity, see lib/helpers/defaults.js */</style>
@@ -1914,6 +1856,7 @@ async function postLogoutSuccessSource(ctx) {
   } = ctx.oidc.client || {}; // client is defined if the user chose to stay logged in with the OP
   const display = clientName || clientId;
   ctx.body = `<!DOCTYPE html>
+    <html>
     <head>
       <title>Sign-out Success</title>
       <style>/* css and html classes omitted for brevity, see lib/helpers/defaults.js */</style>
@@ -1932,7 +1875,7 @@ async function postLogoutSuccessSource(ctx) {
 
 ### features.userinfo
 
-[Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo) - UserInfo Endpoint  
+[`OIDC Core 1.0`](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo) - UserInfo Endpoint  
 
 Enables the userinfo endpoint. Its use requires an opaque Access Token with at least `openid` scope that's without a Resource Server audience.  
 
@@ -1952,7 +1895,7 @@ Several OAuth 2.0 / OIDC profiles prohibit the use of query strings to carry acc
 
 _**default value**_:
 ```js
-true
+false
 ```
 
 ### acrValues
@@ -1972,7 +1915,7 @@ Allow omitting the redirect_uri parameter when only a single one is registered f
 
 _**default value**_:
 ```js
-false
+true
 ```
 
 ### claims
@@ -2002,6 +1945,34 @@ _**default value**_:
 See [/recipes/claim_configuration.md](/recipes/claim_configuration.md)  
 
 
+</details>
+
+### clientAuthMethods
+
+Array of supported Client Authentication methods  
+
+
+_**default value**_:
+```js
+[
+  'client_secret_basic',
+  'client_secret_jwt',
+  'client_secret_post',
+  'private_key_jwt',
+  'none'
+]
+```
+<a id="client-auth-methods-supported-values-list"></a><details><summary>(Click to expand) Supported values list
+</summary><br>
+
+```js
+[
+  'none',
+  'client_secret_basic', 'client_secret_post',
+  'client_secret_jwt', 'private_key_jwt',
+  'tls_client_auth', 'self_signed_tls_client_auth', // these methods are only available when features.mTLS is configured
+]
+```
 </details>
 
 ### clientBasedCORS
@@ -2078,14 +2049,14 @@ _**recommendation**_: Only set this to a reasonable value when needed to cover s
 
 _**default value**_:
 ```js
-0
+15
 ```
 
 ### conformIdTokenClaims
 
 ID Token only contains End-User claims when the requested `response_type` is `id_token`  
 
-[Core 1.0 - Requesting Claims using Scope Values](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims) defines that claims requested using the `scope` parameter are only returned from the UserInfo Endpoint unless the `response_type` is `id_token`.   
+[`OIDC Core 1.0` - Requesting Claims using Scope Values](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims) defines that claims requested using the `scope` parameter are only returned from the UserInfo Endpoint unless the `response_type` is `id_token`.   
  Despite of this configuration the ID Token always includes claims requested using the `scope` parameter when the userinfo endpoint is disabled, or when issuing an Access Token not applicable for access to the userinfo endpoint.   
   
 
@@ -2180,19 +2151,19 @@ _**default value**_:
 
 ### expiresWithSession
 
-Function used to decide whether the given authorization code/ device code or implicit returned access token be bound to the user session. This will be applied to all tokens issued from the authorization / device code in the future. When tokens are session-bound the session will be loaded by its `uid` every time the token is encountered. Session bound tokens will effectively get revoked if the end-user logs out.  
+Function used to decide whether the given authorization code, device code, or authorization-endpoint returned opaque access token be bound to the user session. This will be applied to all opaque tokens issued from the authorization code, device code, or subsequent refresh token use in the future. When artifacts are session-bound their originating session will be loaded by its `uid` every time they are encountered. Session bound artefacts will effectively get revoked if the end-user logs out.  
 
 
 _**default value**_:
 ```js
-async function expiresWithSession(ctx, token) {
-  return !token.scopes.has('offline_access');
+async function expiresWithSession(ctx, code) {
+  return !code.scopes.has('offline_access');
 }
 ```
 
 ### extraClientMetadata
 
-Allows for custom client metadata to be defined, validated, manipulated as well as for existing property validations to be extended. Existing properties are snakeCased on a Client instance (e.g. `client.redirectUris`), new properties (defined by this configuration) will be avaialable with their names verbatim (e.g. `client['urn:example:client:my-property']`)  
+Allows for custom client metadata to be defined, validated, manipulated as well as for existing property validations to be extended. Existing properties are snakeCased on a Client instance (e.g. `client.redirectUris`), new properties (defined by this configuration) will be available with their names verbatim (e.g. `client['urn:example:client:my-property']`)  
 
 
 ### extraClientMetadata.properties
@@ -2221,7 +2192,7 @@ function extraClientMetadataValidator(ctx, key, value, metadata) {
   // @param ctx - koa request context (only provided when a client is being constructed during
   //              Client Registration Request or Client Update Request
   // validations for key, value, other related metadata
-  // throw new Provider.errors.InvalidClientMetadata() to reject the client metadata
+  // throw new errors.InvalidClientMetadata() to reject the client metadata
   // metadata[key] = value; to (re)assign metadata values
   // return not necessary, metadata is already a reference
 }
@@ -2239,7 +2210,7 @@ _**default value**_:
 
 ### extraTokenClaims
 
-Function used to assign additional claims to an Access Token when it is being issued. For `opaque` Access Tokens these claims will be stored in your storage under the `extra` property and returned by introspection as top level claims. For `jwt` or `paseto` Access Tokens these will be top level claims. Returned claims will not overwrite pre-existing top level claims.   
+Function used to add additional claims to an Access Token when it is being issued. For `opaque` Access Tokens these claims will be stored in your storage under the `extra` property and returned by introspection as top level claims. For `jwt` Access Tokens these will be top level claims. Returned claims will not overwrite pre-existing top level claims.   
   
 
 
@@ -2249,14 +2220,14 @@ async function extraTokenClaims(ctx, token) {
   return undefined;
 }
 ```
-<a id="extra-token-claims-to-push-additional-claims-to-an-access-token"></a><details><summary>(Click to expand) To push additional claims to an Access Token
+<a id="extra-token-claims-to-add-an-arbitrary-claim-to-an-access-token"></a><details><summary>(Click to expand) To add an arbitrary claim to an Access Token
 </summary><br>
 
 ```js
 {
-  extraTokenClaims(ctx, token) {
+  async extraTokenClaims(ctx, token) {
     return {
-      'urn:oidc-provider:example:foo': 'bar',
+      'urn:idp:example:foo': 'bar',
     };
   }
 }
@@ -2295,8 +2266,7 @@ Customizer functions used before issuing a structured Access Token.
 _**default value**_:
 ```js
 {
-  jwt: undefined,
-  paseto: undefined
+  jwt: undefined
 }
 ```
 <a id="formats-customizers-to-push-additional-headers-and-payload-claims-to-a-jwt-format-access-token"></a><details><summary>(Click to expand) To push additional headers and payload claims to a `jwt` format Access Token
@@ -2313,25 +2283,10 @@ _**default value**_:
 }
 ```
 </details>
-<a id="formats-customizers-to-push-a-payload-a-footer-and-use-an-implicit-assertion-with-a-paseto-structured-access-token"></a><details><summary>(Click to expand) To push a payload, a footer, and use an implicit assertion with a PASETO structured access token
-</summary><br>
-
-```js
-{
-  customizers: {
-    paseto(ctx, token, structuredToken) {
-      structuredToken.payload.foo = 'bar';
-      structuredToken.footer = { foo: 'bar' };
-      structuredToken.assertion = 'foo'; // v3 and v4 tokens only
-    }
-  }
-}
-```
-</details>
 
 ### httpOptions
 
-Function called whenever calls to an external HTTP(S) resource are being made. You can change the request `timeout` duration, the `agent` used as well as the `lookup` resolver function.   
+Function called whenever calls to an external HTTP(S) resource are being made. You can change the request timeout through the `signal` option, the request `agent` used, the `user-agent` string used for the `user-agent` HTTP header, as well as the `dnsLookup` resolver function.   
   
 
 
@@ -2339,9 +2294,10 @@ _**default value**_:
 ```js
 function httpOptions(url) {
   return {
-    timeout: 2500,
+    signal: undefined, // defaults to AbortSignal.timeout(2500)
     agent: undefined, // defaults to node's global agents (https.globalAgent or http.globalAgent)
-    lookup: undefined, // defaults to CacheableLookup (https://github.com/szmarczak/cacheable-lookup)
+    dnsLookup: undefined, // defaults to `dns.lookup()` (https://nodejs.org/api/dns.html#dnslookuphostname-options-callback)
+    'user-agent': undefined, // defaults to not sending the user-agent HTTP header
   };
 }
 ```
@@ -2354,7 +2310,7 @@ To change all request's timeout configure the httpOptions as a function like so:
 ```js
  {
    httpOptions(url) {
-     return { timeout: 5000 };
+     return { signal: AbortSignal.timeout(5000) };
    }
  }
 ```
@@ -2362,7 +2318,7 @@ To change all request's timeout configure the httpOptions as a function like so:
 
 ### interactions
 
-Holds the configuration for interaction policy and url to send end-users to when the policy decides to require interaction.   
+Holds the configuration for interaction policy and a URL to send end-users to when the policy decides to require interaction.   
   
 
 
@@ -2384,8 +2340,12 @@ new Prompt(
 
     return {
       ...(oidc.params.max_age === undefined ? undefined : { max_age: oidc.params.max_age }),
-      ...(oidc.params.login_hint === undefined ? undefined : { login_hint: oidc.params.login_hint }),
-      ...(oidc.params.id_token_hint === undefined ? undefined : { id_token_hint: oidc.params.id_token_hint }),
+      ...(oidc.params.login_hint === undefined
+        ? undefined
+        : { login_hint: oidc.params.login_hint }),
+      ...(oidc.params.id_token_hint === undefined
+        ? undefined
+        : { id_token_hint: oidc.params.id_token_hint }),
     };
   },
 
@@ -2415,86 +2375,117 @@ new Prompt(
     return Check.NO_NEED_TO_PROMPT;
   }),
 
-  new Check('id_token_hint', 'id_token_hint and authenticated subject do not match', async (ctx) => {
-    const { oidc } = ctx;
-    if (oidc.entities.IdTokenHint === undefined) {
+  new Check(
+    'id_token_hint',
+    'id_token_hint and authenticated subject do not match',
+    async (ctx) => {
+      const { oidc } = ctx;
+      if (oidc.entities.IdTokenHint === undefined) {
+        return Check.NO_NEED_TO_PROMPT;
+      }
+
+      const { payload } = oidc.entities.IdTokenHint;
+
+      let sub = oidc.session.accountId;
+      if (sub === undefined) {
+        return Check.REQUEST_PROMPT;
+      }
+
+      if (oidc.client.subjectType === 'pairwise') {
+        sub = await instance(oidc.provider).configuration('pairwiseIdentifier')(
+          ctx,
+          sub,
+          oidc.client,
+        );
+      }
+
+      if (payload.sub !== sub) {
+        return Check.REQUEST_PROMPT;
+      }
+
       return Check.NO_NEED_TO_PROMPT;
-    }
+    },
+  ),
 
-    const { payload } = oidc.entities.IdTokenHint;
+  new Check(
+    'claims_id_token_sub_value',
+    'requested subject could not be obtained',
+    async (ctx) => {
+      const { oidc } = ctx;
 
-    let sub = oidc.session.accountId;
-    if (sub === undefined) {
+      if (
+        !oidc.claims.id_token
+          || !oidc.claims.id_token.sub
+          || !('value' in oidc.claims.id_token.sub)
+      ) {
+        return Check.NO_NEED_TO_PROMPT;
+      }
+
+      let sub = oidc.session.accountId;
+      if (sub === undefined) {
+        return Check.REQUEST_PROMPT;
+      }
+
+      if (oidc.client.subjectType === 'pairwise') {
+        sub = await instance(oidc.provider).configuration('pairwiseIdentifier')(
+          ctx,
+          sub,
+          oidc.client,
+        );
+      }
+
+      if (oidc.claims.id_token.sub.value !== sub) {
+        return Check.REQUEST_PROMPT;
+      }
+
+      return Check.NO_NEED_TO_PROMPT;
+    },
+    ({ oidc }) => ({ sub: oidc.claims.id_token.sub }),
+  ),
+
+  new Check(
+    'essential_acrs',
+    'none of the requested ACRs could not be obtained',
+    (ctx) => {
+      const { oidc } = ctx;
+      const request = get(oidc.claims, 'id_token.acr', {});
+
+      if (!request || !request.essential || !request.values) {
+        return Check.NO_NEED_TO_PROMPT;
+      }
+
+      if (!Array.isArray(oidc.claims.id_token.acr.values)) {
+        throw new errors.InvalidRequest('invalid claims.id_token.acr.values type');
+      }
+
+      if (request.values.includes(oidc.acr)) {
+        return Check.NO_NEED_TO_PROMPT;
+      }
+
       return Check.REQUEST_PROMPT;
-    }
+    },
+    ({ oidc }) => ({ acr: oidc.claims.id_token.acr }),
+  ),
 
-    if (oidc.client.subjectType === 'pairwise') {
-      sub = await instance(oidc.provider).configuration('pairwiseIdentifier')(ctx, sub, oidc.client);
-    }
+  new Check(
+    'essential_acr',
+    'requested ACR could not be obtained',
+    (ctx) => {
+      const { oidc } = ctx;
+      const request = get(oidc.claims, 'id_token.acr', {});
 
-    if (payload.sub !== sub) {
+      if (!request || !request.essential || !request.value) {
+        return Check.NO_NEED_TO_PROMPT;
+      }
+
+      if (request.value === oidc.acr) {
+        return Check.NO_NEED_TO_PROMPT;
+      }
+
       return Check.REQUEST_PROMPT;
-    }
-
-    return Check.NO_NEED_TO_PROMPT;
-  }),
-
-  new Check('claims_id_token_sub_value', 'requested subject could not be obtained', async (ctx) => {
-    const { oidc } = ctx;
-
-    if (!oidc.claims.id_token || !oidc.claims.id_token.sub || !('value' in oidc.claims.id_token.sub)) {
-      return Check.NO_NEED_TO_PROMPT;
-    }
-
-    let sub = oidc.session.accountId;
-    if (sub === undefined) {
-      return Check.REQUEST_PROMPT;
-    }
-
-    if (oidc.client.subjectType === 'pairwise') {
-      sub = await instance(oidc.provider).configuration('pairwiseIdentifier')(ctx, sub, oidc.client);
-    }
-
-    if (oidc.claims.id_token.sub.value !== sub) {
-      return Check.REQUEST_PROMPT;
-    }
-
-    return Check.NO_NEED_TO_PROMPT;
-  }, ({ oidc }) => ({ sub: oidc.claims.id_token.sub })),
-
-  new Check('essential_acrs', 'none of the requested ACRs could not be obtained', (ctx) => {
-    const { oidc } = ctx;
-    const request = get(oidc.claims, 'id_token.acr', {});
-
-    if (!request || !request.essential || !request.values) {
-      return Check.NO_NEED_TO_PROMPT;
-    }
-
-    if (!Array.isArray(oidc.claims.id_token.acr.values)) {
-      throw new errors.InvalidRequest('invalid claims.id_token.acr.values type');
-    }
-
-    if (request.values.includes(oidc.acr)) {
-      return Check.NO_NEED_TO_PROMPT;
-    }
-
-    return Check.REQUEST_PROMPT;
-  }, ({ oidc }) => ({ acr: oidc.claims.id_token.acr })),
-
-  new Check('essential_acr', 'requested ACR could not be obtained', (ctx) => {
-    const { oidc } = ctx;
-    const request = get(oidc.claims, 'id_token.acr', {});
-
-    if (!request || !request.essential || !request.value) {
-      return Check.NO_NEED_TO_PROMPT;
-    }
-
-    if (request.value === oidc.acr) {
-      return Check.NO_NEED_TO_PROMPT;
-    }
-
-    return Check.REQUEST_PROMPT;
-  }, ({ oidc }) => ({ acr: oidc.claims.id_token.acr })),
+    },
+    ({ oidc }) => ({ acr: oidc.claims.id_token.acr }),
+  ),
 )
 
 /* CONSENT PROMPT */
@@ -2519,14 +2510,14 @@ new Prompt(
     const encounteredScopes = new Set(oidc.grant.getOIDCScopeEncountered().split(' '));
 
     let missing;
-    for (const scope of oidc.requestParamOIDCScopes) { // eslint-disable-line no-restricted-syntax
+    for (const scope of oidc.requestParamOIDCScopes) {
       if (!encounteredScopes.has(scope)) {
-        missing || (missing = []);
+        missing ||= [];
         missing.push(scope);
       }
     }
 
-    if (missing && missing.length) {
+    if (missing?.length) {
       ctx.oidc[missingOIDCScope] = missing;
       return Check.REQUEST_PROMPT;
     }
@@ -2539,14 +2530,14 @@ new Prompt(
     const encounteredClaims = new Set(oidc.grant.getOIDCClaimsEncountered());
 
     let missing;
-    for (const claim of oidc.requestParamClaims) { // eslint-disable-line no-restricted-syntax
+    for (const claim of oidc.requestParamClaims) {
       if (!encounteredClaims.has(claim) && !['sub', 'sid', 'auth_time', 'acr', 'amr', 'iss'].includes(claim)) {
-        missing || (missing = []);
+        missing ||= [];
         missing.push(claim);
       }
     }
 
-    if (missing && missing.length) {
+    if (missing?.length) {
       ctx.oidc[missingOIDCClaims] = missing;
       return Check.REQUEST_PROMPT;
     }
@@ -2560,16 +2551,15 @@ new Prompt(
 
     let missing;
 
-    // eslint-disable-next-line no-restricted-syntax
     for (const [indicator, resourceServer] of Object.entries(ctx.oidc.resourceServers)) {
       const encounteredScopes = new Set(oidc.grant.getResourceScopeEncountered(indicator).split(' '));
       const requestedScopes = ctx.oidc.requestParamScopes;
       const availableScopes = resourceServer.scopes;
 
-      for (const scope of requestedScopes) { // eslint-disable-line no-restricted-syntax
+      for (const scope of requestedScopes) {
         if (availableScopes.has(scope) && !encounteredScopes.has(scope)) {
-          missing || (missing = {});
-          missing[indicator] || (missing[indicator] = []);
+          missing ||= {};
+          missing[indicator] ||= [];
           missing[indicator].push(scope);
         }
       }
@@ -2615,7 +2605,8 @@ You may be required to skip (silently accept) some of the consent checks, while 
 </summary><br>
 
 ```js
-const { interactionPolicy: { Prompt, Check, base } } = require('oidc-provider');
+import { interactionPolicy } from 'oidc-provider';
+const { Prompt, Check, base } = interactionPolicy;
 const basePolicy = base()
 // basePolicy.get(name) => returns a Prompt instance by its name
 // basePolicy.remove(name) => removes a Prompt instance by its name
@@ -2661,7 +2652,7 @@ async issueRefreshToken(ctx, client, code) {
   if (!client.grantTypeAllowed('refresh_token')) {
     return false;
   }
-  return code.scopes.has('offline_access') || (client.applicationType === 'web' && client.tokenEndpointAuthMethod === 'none');
+  return code.scopes.has('offline_access') || (client.applicationType === 'web' && client.clientAuthMethod === 'none');
 }
 ```
 </details>
@@ -2674,9 +2665,8 @@ Helper function used to load existing but also just in time pre-established Gran
 _**default value**_:
 ```js
 async function loadExistingGrant(ctx) {
-  const grantId = (ctx.oidc.result
-    && ctx.oidc.result.consent
-    && ctx.oidc.result.consent.grantId) || ctx.oidc.session.grantIdFor(ctx.oidc.client.clientId);
+  const grantId = (ctx.oidc.result?.consent?.grantId)
+    || ctx.oidc.session.grantIdFor(ctx.oidc.client.clientId);
   if (grantId) {
     return ctx.oidc.provider.Grant.find(grantId);
   }
@@ -2686,7 +2676,7 @@ async function loadExistingGrant(ctx) {
 
 ### pairwiseIdentifier
 
-Function used by the OP when resolving pairwise ID Token and Userinfo sub claim values. See [Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg)  
+Function used by the OP when resolving pairwise ID Token and Userinfo sub claim values. See [`OIDC Core 1.0`](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg)  
 
 _**recommendation**_: Since this might be called several times in one request with the same arguments consider using memoization or otherwise caching the result based on account and client ids.  
 
@@ -2704,9 +2694,9 @@ async function pairwiseIdentifier(ctx, accountId, client) {
 
 ### pkce
 
-[RFC7636 - Proof Key for Code Exchange (PKCE)](https://www.rfc-editor.org/rfc/rfc7636.html)  
+[`RFC7636` - Proof Key for Code Exchange (`PKCE`)](https://www.rfc-editor.org/rfc/rfc7636.html)  
 
-PKCE configuration such as available methods and policy check on required use of PKCE  
+`PKCE` configuration such as available methods and policy check on required use of `PKCE`  
 
 
 ### pkce.methods
@@ -2725,8 +2715,8 @@ _**default value**_:
 
 ### pkce.required
 
-Configures if and when the OP requires clients to use PKCE. This helper is called whenever an authorization request lacks the code_challenge parameter. Return
- - `false` to allow the request to continue without PKCE
+Configures if and when the OP requires clients to use `PKCE`. This helper is called whenever an authorization request lacks the code_challenge parameter. Return
+ - `false` to allow the request to continue without `PKCE`
  - `true` to abort the request  
 
 
@@ -2747,6 +2737,7 @@ _**default value**_:
 async function renderError(ctx, out, error) {
   ctx.type = 'html';
   ctx.body = `<!DOCTYPE html>
+    <html>
     <head>
       <title>oops! something went wrong</title>
       <style>/* css and html classes omitted for brevity, see lib/helpers/defaults.js */</style>
@@ -2779,7 +2770,7 @@ _**default value**_:
 <a id="response-types-supported-values-list"></a><details><summary>(Click to expand) Supported values list</summary><br>
 
 
-These are values defined in [Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html#Authentication) and [OAuth 2.0 Multiple Response Type Encoding Practices](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html)
+These are values defined in [`OIDC Core 1.0`](https://openid.net/specs/openid-connect-core-1_0.html#Authentication) and [OAuth 2.0 Multiple Response Type Encoding Practices](https://openid.net/specs/oauth-v2-multiple-response-types-1_0.html)
   
 
 ```js
@@ -2834,7 +2825,7 @@ function rotateRefreshToken(ctx) {
     return false;
   }
   // rotate non sender-constrained public client refresh tokens
-  if (client.tokenEndpointAuthMethod === 'none' && !refreshToken.isSenderConstrained()) {
+  if (client.clientAuthMethod === 'none' && !refreshToken.isSenderConstrained()) {
     return true;
   }
   // rotate if the token is nearing expiration (it's beyond 70% of its lifetime)
@@ -2905,34 +2896,6 @@ _**default value**_:
 ]
 ```
 
-### tokenEndpointAuthMethods
-
-Array of Client Authentication methods supported by this OP's Token Endpoint  
-
-
-_**default value**_:
-```js
-[
-  'client_secret_basic',
-  'client_secret_jwt',
-  'client_secret_post',
-  'private_key_jwt',
-  'none'
-]
-```
-<a id="token-endpoint-auth-methods-supported-values-list"></a><details><summary>(Click to expand) Supported values list
-</summary><br>
-
-```js
-[
-  'none',
-  'client_secret_basic', 'client_secret_post',
-  'client_secret_jwt', 'private_key_jwt',
-  'tls_client_auth', 'self_signed_tls_client_auth', // these methods are only available when features.mTLS is configured
-]
-```
-</details>
-
 ### ttl
 
 description: Expirations for various token and session types. The value can be a number (in seconds) or a synchronous function that dynamically returns value based on the context.   
@@ -2947,24 +2910,18 @@ _**default value**_:
 ```js
 {
   AccessToken: function AccessTokenTTL(ctx, token, client) {
-    if (token.resourceServer) {
-      return token.resourceServer.accessTokenTTL || 60 * 60; // 1 hour in seconds
-    }
-    return 60 * 60; // 1 hour in seconds
+    return token.resourceServer?.accessTokenTTL || 60 * 60; // 1 hour in seconds
   },
-  AuthorizationCode: 600 /* 10 minutes in seconds */,
+  AuthorizationCode: 60 /* 1 minute in seconds */,
   BackchannelAuthenticationRequest: function BackchannelAuthenticationRequestTTL(ctx, request, client) {
-    if (ctx && ctx.oidc && ctx.oidc.params.requested_expiry) {
+    if (ctx?.oidc && ctx.oidc.params.requested_expiry) {
       return Math.min(10 * 60, +ctx.oidc.params.requested_expiry); // 10 minutes in seconds or requested_expiry, whichever is shorter
     }
   
     return 10 * 60; // 10 minutes in seconds
   },
   ClientCredentials: function ClientCredentialsTTL(ctx, token, client) {
-    if (token.resourceServer) {
-      return token.resourceServer.accessTokenTTL || 10 * 60; // 10 minutes in seconds
-    }
-    return 10 * 60; // 10 minutes in seconds
+    return token.resourceServer?.accessTokenTTL || 10 * 60; // 10 minutes in seconds
   },
   DeviceCode: 600 /* 10 minutes in seconds */,
   Grant: 1209600 /* 14 days in seconds */,
@@ -2974,7 +2931,7 @@ _**default value**_:
     if (
       ctx && ctx.oidc.entities.RotatedRefreshToken
       && client.applicationType === 'web'
-      && client.tokenEndpointAuthMethod === 'none'
+      && client.clientAuthMethod === 'none'
       && !token.isSenderConstrained()
     ) {
       // Non-Sender Constrained SPA RefreshTokens do not have infinite expiration through rotation
@@ -3010,12 +2967,10 @@ Configure `ttl` for a given token type with a function like so, this must return
 
 Fine-tune the algorithms your provider will support by declaring algorithm values for each respective JWA use  
 
-_**recommendation**_: Only allow JWA algs that are necessary. The current defaults are based on recommendations from the [JWA specification](https://www.rfc-editor.org/rfc/rfc7518.html) + enables RSASSA-PSS based on current guidance in FAPI. "none" JWT algs are disabled by default but available if you need them.  
-
 
 ### enabledJWA.authorizationEncryptionAlgValues
 
-JWE "alg" Algorithm values the provider supports for JWT Authorization response (JARM) encryption   
+JWE "alg" Algorithm values the provider supports for JWT Authorization response (`JARM`) encryption   
   
 
 
@@ -3026,6 +2981,7 @@ _**default value**_:
   'A256KW',
   'ECDH-ES',
   'RSA-OAEP',
+  'RSA-OAEP-256',
   'dir'
 ]
 ```
@@ -3035,13 +2991,11 @@ _**default value**_:
 ```js
 [
   // asymmetric RSAES based
-  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512', 'RSA1_5',
+  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512',
   // asymmetric ECDH-ES based
   'ECDH-ES', 'ECDH-ES+A128KW', 'ECDH-ES+A192KW', 'ECDH-ES+A256KW',
   // symmetric AES key wrapping
   'A128KW', 'A192KW', 'A256KW', 'A128GCMKW', 'A192GCMKW', 'A256GCMKW',
-  // symmetric PBES2 + AES
-  'PBES2-HS256+A128KW', 'PBES2-HS384+A192KW', 'PBES2-HS512+A256KW',
   // direct encryption
   'dir',
 ]
@@ -3050,7 +3004,7 @@ _**default value**_:
 
 ### enabledJWA.authorizationEncryptionEncValues
 
-JWE "enc" Content Encryption Algorithm values the provider supports to encrypt JWT Authorization Responses (JARM) with   
+JWE "enc" Content Encryption Algorithm values the provider supports to encrypt JWT Authorization Responses (`JARM`) with   
   
 
 
@@ -3075,7 +3029,7 @@ _**default value**_:
 
 ### enabledJWA.authorizationSigningAlgValues
 
-JWS "alg" Algorithm values the provider supports to sign JWT Authorization Responses (JARM) with   
+JWS "alg" Algorithm values the provider supports to sign JWT Authorization Responses (`JARM`) with   
   
 
 
@@ -3102,17 +3056,45 @@ _**default value**_:
 ```
 </details>
 
-### enabledJWA.dPoPSigningAlgValues
+### enabledJWA.clientAuthSigningAlgValues
 
-JWS "alg" Algorithm values the provider supports to verify signed DPoP Proof JWTs with   
+JWS "alg" Algorithm values the provider supports for signed JWT Client Authentication   
   
 
 
 _**default value**_:
 ```js
 [
+  'HS256',
   'RS256',
   'PS256',
+  'ES256',
+  'EdDSA'
+]
+```
+<a id="enabled-jwa-client-auth-signing-alg-values-supported-values-list"></a><details><summary>(Click to expand) Supported values list
+</summary><br>
+
+```js
+[
+  'RS256', 'RS384', 'RS512',
+  'PS256', 'PS384', 'PS512',
+  'ES256', 'ES256K', 'ES384', 'ES512',
+  'EdDSA',
+  'HS256', 'HS384', 'HS512',
+]
+```
+</details>
+
+### enabledJWA.dPoPSigningAlgValues
+
+JWS "alg" Algorithm values the provider supports to verify signed DPoP proof JWTs with   
+  
+
+
+_**default value**_:
+```js
+[
   'ES256',
   'EdDSA'
 ]
@@ -3143,6 +3125,7 @@ _**default value**_:
   'A256KW',
   'ECDH-ES',
   'RSA-OAEP',
+  'RSA-OAEP-256',
   'dir'
 ]
 ```
@@ -3152,13 +3135,11 @@ _**default value**_:
 ```js
 [
   // asymmetric RSAES based
-  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512', 'RSA1_5',
+  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512',
   // asymmetric ECDH-ES based
   'ECDH-ES', 'ECDH-ES+A128KW', 'ECDH-ES+A192KW', 'ECDH-ES+A256KW',
   // symmetric AES key wrapping
   'A128KW', 'A192KW', 'A256KW', 'A128GCMKW', 'A192GCMKW', 'A256GCMKW',
-  // symmetric PBES2 + AES
-  'PBES2-HS256+A128KW', 'PBES2-HS384+A192KW', 'PBES2-HS512+A256KW',
   // direct encryption
   'dir',
 ]
@@ -3215,7 +3196,6 @@ _**default value**_:
   'ES256', 'ES256K', 'ES384', 'ES512',
   'EdDSA',
   'HS256', 'HS384', 'HS512',
-  'none',
 ]
 ```
 </details>
@@ -3233,6 +3213,7 @@ _**default value**_:
   'A256KW',
   'ECDH-ES',
   'RSA-OAEP',
+  'RSA-OAEP-256',
   'dir'
 ]
 ```
@@ -3242,13 +3223,11 @@ _**default value**_:
 ```js
 [
   // asymmetric RSAES based
-  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512', 'RSA1_5',
+  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512',
   // asymmetric ECDH-ES based
   'ECDH-ES', 'ECDH-ES+A128KW', 'ECDH-ES+A192KW', 'ECDH-ES+A256KW',
   // symmetric AES key wrapping
   'A128KW', 'A192KW', 'A256KW', 'A128GCMKW', 'A192GCMKW', 'A256GCMKW',
-  // symmetric PBES2 + AES
-  'PBES2-HS256+A128KW', 'PBES2-HS384+A192KW', 'PBES2-HS512+A256KW',
   // direct encryption
   'dir',
 ]
@@ -3305,14 +3284,13 @@ _**default value**_:
   'ES256', 'ES256K', 'ES384', 'ES512',
   'EdDSA',
   'HS256', 'HS384', 'HS512',
-  'none',
 ]
 ```
 </details>
 
 ### enabledJWA.requestObjectEncryptionAlgValues
 
-JWE "alg" Algorithm values the provider supports to receive encrypted Request Objects (JAR) with   
+JWE "alg" Algorithm values the provider supports to receive encrypted Request Objects (`JAR`) with   
   
 
 
@@ -3323,6 +3301,7 @@ _**default value**_:
   'A256KW',
   'ECDH-ES',
   'RSA-OAEP',
+  'RSA-OAEP-256',
   'dir'
 ]
 ```
@@ -3332,13 +3311,11 @@ _**default value**_:
 ```js
 [
   // asymmetric RSAES based
-  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512', 'RSA1_5',
+  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512',
   // asymmetric ECDH-ES based
   'ECDH-ES', 'ECDH-ES+A128KW', 'ECDH-ES+A192KW', 'ECDH-ES+A256KW',
   // symmetric AES key wrapping
   'A128KW', 'A192KW', 'A256KW', 'A128GCMKW', 'A192GCMKW', 'A256GCMKW',
-  // symmetric PBES2 + AES
-  'PBES2-HS256+A128KW', 'PBES2-HS384+A192KW', 'PBES2-HS512+A256KW',
   // direct encryption
   'dir',
 ]
@@ -3347,7 +3324,7 @@ _**default value**_:
 
 ### enabledJWA.requestObjectEncryptionEncValues
 
-JWE "enc" Content Encryption Algorithm values the provider supports to decrypt Request Objects (JAR) with   
+JWE "enc" Content Encryption Algorithm values the provider supports to decrypt Request Objects (`JAR`) with   
   
 
 
@@ -3372,7 +3349,7 @@ _**default value**_:
 
 ### enabledJWA.requestObjectSigningAlgValues
 
-JWS "alg" Algorithm values the provider supports to receive signed Request Objects (JAR) with   
+JWS "alg" Algorithm values the provider supports to receive signed Request Objects (`JAR`) with   
   
 
 
@@ -3387,37 +3364,6 @@ _**default value**_:
 ]
 ```
 <a id="enabled-jwa-request-object-signing-alg-values-supported-values-list"></a><details><summary>(Click to expand) Supported values list
-</summary><br>
-
-```js
-[
-  'RS256', 'RS384', 'RS512',
-  'PS256', 'PS384', 'PS512',
-  'ES256', 'ES256K', 'ES384', 'ES512',
-  'EdDSA',
-  'HS256', 'HS384', 'HS512',
-  'none',
-]
-```
-</details>
-
-### enabledJWA.tokenEndpointAuthSigningAlgValues
-
-JWS "alg" Algorithm values the provider supports for signed JWT Client Authentication   
-  
-
-
-_**default value**_:
-```js
-[
-  'HS256',
-  'RS256',
-  'PS256',
-  'ES256',
-  'EdDSA'
-]
-```
-<a id="enabled-jwa-token-endpoint-auth-signing-alg-values-supported-values-list"></a><details><summary>(Click to expand) Supported values list
 </summary><br>
 
 ```js
@@ -3444,6 +3390,7 @@ _**default value**_:
   'A256KW',
   'ECDH-ES',
   'RSA-OAEP',
+  'RSA-OAEP-256',
   'dir'
 ]
 ```
@@ -3453,13 +3400,11 @@ _**default value**_:
 ```js
 [
   // asymmetric RSAES based
-  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512', 'RSA1_5',
+  'RSA-OAEP', 'RSA-OAEP-256', 'RSA-OAEP-384', 'RSA-OAEP-512',
   // asymmetric ECDH-ES based
   'ECDH-ES', 'ECDH-ES+A128KW', 'ECDH-ES+A192KW', 'ECDH-ES+A256KW',
   // symmetric AES key wrapping
   'A128KW', 'A192KW', 'A256KW', 'A128GCMKW', 'A192GCMKW', 'A256GCMKW',
-  // symmetric PBES2 + AES
-  'PBES2-HS256+A128KW', 'PBES2-HS384+A192KW', 'PBES2-HS512+A256KW',
   // direct encryption
   'dir',
 ]
@@ -3516,7 +3461,6 @@ _**default value**_:
   'ES256', 'ES256K', 'ES384', 'ES512',
   'EdDSA',
   'HS256', 'HS384', 'HS512',
-  'none',
 ]
 ```
 </details>
@@ -3566,10 +3510,10 @@ const client_secret = 'some secure & non-standard secret';
 
 // After formencoding these two tokens
 const encoded_id = 'an%3Aidentifier';
-const encoded_secret = 'some+secure+%26+non-standard+secret';
+const encoded_secret = 'some+secure+%26+non%2Dstandard+secret';
 
 // Basic auth header format Authorization: Basic base64(encoded_id + ':' + encoded_secret)
-// Authorization: Basic YW4lM0FpZGVudGlmaWVyOnNvbWUrc2VjdXJlKyUyNitub24tc3RhbmRhcmQrc2VjcmV0
+// Authorization: Basic YW4lM0FpZGVudGlmaWVyOnNvbWUrc2VjdXJlKyUyNitub24lMkRzdGFuZGFyZCtzZWNyZXQ=
 ```
 
 So essentially, your client is not submitting the client auth in a conform way and you should fix
@@ -3582,7 +3526,7 @@ Every client is configured with one of 7 available
 and it must adhere to how that given method must be submitted. Submitting multiple means of
 authentication is also not possible. If you're a provider operator you're encouraged to set up
 listeners for errors
-(see [events.md](https://github.com/panva/node-oidc-provider/blob/v7.x/docs/events.md)) and
+(see [events.md](https://github.com/panva/node-oidc-provider/blob/v8.x/docs/events.md)) and
 deliver them to client developers out-of-band, e.g. by logs in an admin interface.
 
 ```js

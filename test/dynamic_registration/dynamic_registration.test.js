@@ -1,10 +1,10 @@
-const { expect } = require('chai');
-const sinon = require('sinon');
+import { expect } from 'chai';
+import sinon from 'sinon';
 
-const bootstrap = require('../test_helper');
+import bootstrap from '../test_helper.js';
 
 describe('registration features', () => {
-  before(bootstrap(__dirname));
+  before(bootstrap(import.meta.url));
 
   context('POST /reg', () => {
     it('generates the id, secret that does not expire and reg access token and returns the defaulted values', function () {
@@ -326,17 +326,6 @@ describe('registration features', () => {
           this.provider.enable('registration', { initialAccessToken: undefined });
         });
 
-        it('allows reg calls with the access tokens as a Bearer token [query]', function () {
-          return this.agent.post('/reg')
-            .send({
-              redirect_uris: ['https://client.example.com/cb'],
-            })
-            .query({
-              access_token: 'foobar',
-            })
-            .expect(201);
-        });
-
         it('fails reg calls with the access tokens in application/json body', function () {
           return this.agent.post('/reg')
             .send({
@@ -399,17 +388,6 @@ describe('registration features', () => {
             const token = this.TestAdapter.for('InitialAccessToken').syncFind(jti);
             expect(token).to.have.property('exp');
           });
-        });
-
-        it('allows reg calls with the access tokens as a Bearer token [query]', function () {
-          return this.agent.post('/reg')
-            .send({
-              redirect_uris: ['https://client.example.com/cb'],
-            })
-            .query({
-              access_token: this.token,
-            })
-            .expect(201);
         });
 
         it('fails reg calls with the access tokens in application/json body', function () {

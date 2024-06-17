@@ -1,9 +1,9 @@
-const { expect } = require('chai');
+import { expect } from 'chai';
 
-const bootstrap = require('../test_helper');
+import bootstrap from '../test_helper.js';
 
 describe('registration management with client_id as URI', () => {
-  before(bootstrap(__dirname));
+  before(bootstrap(import.meta.url));
 
   it('returns client_id as a URI string', async function () {
     let client_id;
@@ -28,7 +28,7 @@ describe('registration management with client_id as URI', () => {
       .auth(registration_access_token, { type: 'bearer' })
       .expect(200)
       .expect((response) => {
-        ({ registration_client_uri } = response.body);
+        ({ registration_access_token, registration_client_uri } = response.body);
 
         const parsed = new URL(registration_client_uri);
         expect(parsed.search).to.be.empty;
@@ -44,7 +44,7 @@ describe('registration management with client_id as URI', () => {
       })
       .expect(200)
       .expect((response) => {
-        ({ registration_client_uri } = response.body);
+        ({ registration_access_token, registration_client_uri } = response.body);
 
         const parsed = new URL(registration_client_uri);
         expect(parsed.search).to.be.empty;

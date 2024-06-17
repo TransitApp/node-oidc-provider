@@ -1,13 +1,13 @@
-const cloneDeep = require('lodash/cloneDeep');
-const merge = require('lodash/merge');
+import merge from 'lodash/merge.js';
 
-const nanoid = require('../../lib/helpers/nanoid');
-const config = cloneDeep(require('../default.config'));
+import nanoid from '../../lib/helpers/nanoid.js';
+import getConfig from '../default.config.js';
+
+const config = getConfig();
 
 merge(config.features, {
   registration: {
     enabled: true,
-    rotateRegistrationAccessToken: false,
     idFactory() {
       return new URL(`https://repo.clients.com/path?id=${nanoid()}`).href;
     },
@@ -17,6 +17,6 @@ merge(config.features, {
   },
 });
 
-module.exports = {
+export default {
   config,
 };

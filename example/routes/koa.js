@@ -1,15 +1,16 @@
-/* eslint-disable no-console, max-len, camelcase, no-unused-vars */
-const { strict: assert } = require('assert');
-const querystring = require('querystring');
-const crypto = require('crypto');
-const { inspect } = require('util');
+/* eslint-disable no-console, camelcase, no-unused-vars */
+import { strict as assert } from 'node:assert';
+import * as querystring from 'node:querystring';
+import * as crypto from 'node:crypto';
+import { inspect } from 'node:util';
 
-const isEmpty = require('lodash/isEmpty');
-const bodyParser = require('koa-body');
-const Router = require('koa-router');
+import isEmpty from 'lodash/isEmpty.js';
+import { koaBody as bodyParser } from 'koa-body';
+import Router from 'koa-router';
 
-const { renderError } = require('../../lib/helpers/defaults')(); // make your own, you'll need it anyway
-const Account = require('../support/account');
+import { defaults } from '../../lib/helpers/defaults.js'; // make your own, you'll need it anyway
+import Account from '../support/account.js';
+import { errors } from '../../lib/index.js'; // from 'oidc-provider';
 
 const keys = new Set();
 const debug = (obj) => querystring.stringify(Object.entries(obj).reduce((acc, [key, value]) => {
@@ -21,9 +22,10 @@ const debug = (obj) => querystring.stringify(Object.entries(obj).reduce((acc, [k
   encodeURIComponent(value) { return keys.has(value) ? `<strong>${value}</strong>` : value; },
 });
 
-module.exports = (provider) => {
+const { SessionNotFound } = errors;
+
+export default (provider) => {
   const router = new Router();
-  const { constructor: { errors: { SessionNotFound } } } = provider;
 
   router.use(async (ctx, next) => {
     ctx.set('cache-control', 'no-store');
@@ -33,7 +35,7 @@ module.exports = (provider) => {
       if (err instanceof SessionNotFound) {
         ctx.status = err.status;
         const { message: error, error_description } = err;
-        renderError(ctx, { error, error_description }, err);
+        await defaults.renderError(ctx, { error, error_description }, err);
       } else {
         throw err;
       }
@@ -119,10 +121,9 @@ module.exports = (provider) => {
 
         // init
         if (!Object.keys(callbackParams).length) {
-          const state = `${ctx.params.uid}|${crypto.randomBytes(32).toString('hex')}`;
+          const state = ctx.params.uid;
           const nonce = crypto.randomBytes(32).toString('hex');
 
-          ctx.cookies.set('google.state', state, { path, sameSite: 'strict' });
           ctx.cookies.set('google.nonce', nonce, { path, sameSite: 'strict' });
 
           ctx.status = 303;
@@ -132,12 +133,10 @@ module.exports = (provider) => {
         }
 
         // callback
-        const state = ctx.cookies.get('google.state');
-        ctx.cookies.set('google.state', null, { path });
         const nonce = ctx.cookies.get('google.nonce');
         ctx.cookies.set('google.nonce', null, { path });
 
-        const tokenset = await ctx.google.callback(undefined, callbackParams, { state, nonce, response_type: 'id_token' });
+        const tokenset = await ctx.google.callback(undefined, callbackParams, { state: ctx.params.uid, nonce, response_type: 'id_token' });
         const account = await Account.findByFederated('google', tokenset.claims());
 
         const result = {
@@ -180,7 +179,6 @@ module.exports = (provider) => {
       grant.addOIDCClaims(details.missingOIDCClaims);
     }
     if (details.missingResourceScopes) {
-      // eslint-disable-next-line no-restricted-syntax
       for (const [indicator, scope] of Object.entries(details.missingResourceScopes)) {
         grant.addResourceScope(indicator, scope.join(' '));
       }
