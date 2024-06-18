@@ -55,10 +55,10 @@
     "test": "node ./test/run"
   },
   "dependencies": {
-    "@koa/cors": "^3.3.0",
+    "@koa/cors": "^5.0.0",
     "cacheable-lookup": "^6.0.4",
     "debug": "^4.3.4",
-    "ejs": "^3.1.8",
+    "ejs": "^3.1.10",
     "got": "^11.8.5",
     "jose": "^4.10.3",
     "jsesc": "^3.0.2",
